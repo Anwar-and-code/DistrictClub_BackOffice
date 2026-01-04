@@ -81,7 +81,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const Center(
                   child: AppLogo(
                     size: AppLogoSize.medium,
-                    color: AppColors.brandPrimary,
                   ),
                 ),
                 

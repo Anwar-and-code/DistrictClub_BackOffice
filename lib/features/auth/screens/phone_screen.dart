@@ -45,7 +45,6 @@ class _PhoneScreenState extends State<PhoneScreen> {
               // Logo
               const AppLogo(
                 size: AppLogoSize.medium,
-                color: AppColors.brandPrimary,
               ),
               
               AppSpacing.vGapXxl,

@@ -121,7 +121,6 @@ class _OtpScreenState extends State<OtpScreen> {
                     // Logo
                     const AppLogo(
                       size: AppLogoSize.large,
-                      color: AppColors.brandPrimary,
                     ),
                     
                     AppSpacing.vGapXxl,

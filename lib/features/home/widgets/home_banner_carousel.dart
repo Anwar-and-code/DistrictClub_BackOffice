@@ -56,8 +56,6 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
             itemBuilder: (context, index) {
               return Padding(
                 padding: AppSpacing.screenPaddingHorizontalOnly,
-              return Padding(
-                padding: AppSpacing.screenPaddingHorizontalOnly,
                 child: _BannerCard(
                   banner: _banners[index],
                   onNext: () {
@@ -76,7 +74,6 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
                     AppComingSoonModal.show(context);
                   },
                 ),
-              );
               );
             },
           ),

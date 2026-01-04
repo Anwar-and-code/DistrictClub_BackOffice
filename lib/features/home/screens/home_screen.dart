@@ -28,7 +28,6 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     const AppLogo(
                       size: AppLogoSize.medium,
-                      color: AppColors.brandPrimary,
                     ),
                     AppNotificationBadge(
                       showBadge: true,

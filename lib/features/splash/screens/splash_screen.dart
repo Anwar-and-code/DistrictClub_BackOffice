@@ -140,7 +140,6 @@ class AppLogoImage extends StatelessWidget {
         // Fallback to text logo if image not found
         return const AppLogo(
           size: AppLogoSize.xlarge,
-          color: AppColors.brandPrimary,
         );
       },
     );

@@ -18,7 +18,6 @@ class WelcomeScreen extends StatelessWidget {
               // Logo
               const AppLogo(
                 size: AppLogoSize.large,
-                color: AppColors.brandPrimary,
               ),
               
               const Spacer(flex: 1),

@@ -77,7 +77,6 @@ class _EmailScreenState extends State<EmailScreen> {
                 height: 40,
                 errorBuilder: (_, __, ___) => const AppLogo(
                   size: AppLogoSize.medium,
-                  color: AppColors.brandPrimary,
                 ),
               ),
 

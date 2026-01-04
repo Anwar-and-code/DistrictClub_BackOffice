@@ -13,20 +13,28 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             children: [
               // Header with back button and settings
-              Padding(
+              Container(
+                height: 56,
                 padding: AppSpacing.screenPaddingHorizontalOnly,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // Back Button (Leading)
                     AppIconButton(
                       icon: AppIcons.arrowBack,
                       onPressed: () => Navigator.of(context).pop(),
                       variant: AppButtonVariant.ghost,
                     ),
-                    Text(
-                      'Profil',
-                      style: AppTypography.titleLarge,
+                    
+                    // Title (Centered with Expanded)
+                    Expanded(
+                      child: Text(
+                        'Profil',
+                        style: AppTypography.titleLarge,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
+                    
+                    // Settings Button (Trailing)
                     AppIconButton(
                       icon: AppIcons.settings,
                       onPressed: () {

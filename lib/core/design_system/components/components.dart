@@ -27,6 +27,9 @@ export 'badges/app_badge.dart';
 // Typography
 export 'typography/app_text.dart';
 
+// Branding
+export 'branding/app_logo.dart';
+
 // Feedback
 export 'feedback/app_coming_soon.dart';
 export 'feedback/app_empty_state.dart';

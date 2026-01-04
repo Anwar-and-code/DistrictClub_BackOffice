@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../tokens/tokens.dart';
+import '../branding/app_logo.dart';
 
 /// Navigation item data model
 class AppNavItem {
@@ -198,46 +199,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// PadelHouse Logo Widget
-/// Based on the brand logo shown in mockups
-class AppLogo extends StatelessWidget {
-  const AppLogo({
-    super.key,
-    this.size = AppLogoSize.medium,
-    this.color,
-  });
 
-  final AppLogoSize size;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      'padelhouse',
-      style: TextStyle(
-        fontSize: _getFontSize(),
-        fontWeight: FontWeight.w300,
-        letterSpacing: 2,
-        color: color ?? AppColors.brandPrimary,
-      ),
-    );
-  }
-
-  double _getFontSize() {
-    switch (size) {
-      case AppLogoSize.small:
-        return 18;
-      case AppLogoSize.medium:
-        return 24;
-      case AppLogoSize.large:
-        return 32;
-      case AppLogoSize.xlarge:
-        return 40;
-    }
-  }
-}
-
-enum AppLogoSize { small, medium, large, xlarge }
 
 /// Page indicator dots - For carousel/slider
 class AppPageIndicator extends StatelessWidget {

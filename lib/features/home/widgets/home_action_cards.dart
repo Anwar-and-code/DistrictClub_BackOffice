@@ -69,9 +69,8 @@ class HomeActionCards extends StatelessWidget {
                       child: _BentoCard(
                         title: 'Tournois',
                         icon: AppIcons.trophy,
-                        // Use a darker/different image for contrast
-                        imageUrl: 'https://images.unsplash.com/photo-1628779238951-be2c9f256f27?w=400&q=80',
-                        color: AppColors.neutral700,
+                        imageUrl: 'https://images.unsplash.com/photo-1551773188-0801da12ddae?w=400&q=80',
+                        color: AppColors.brandPrimary,
                         onTap: () => Navigator.pushNamed(context, AppRouter.tournaments),
                       ),
                     ),
@@ -181,19 +180,11 @@ class _BentoCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // Icon Badge
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.glassSurface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.glassBorder),
-                        ),
-                        child: Icon(
-                          icon,
-                          color: color,
-                          size: isLarge ? 28 : 20,
-                        ),
+                      // Icon (no wrapper)
+                      Icon(
+                        icon,
+                        color: AppColors.white,
+                        size: isLarge ? 32 : 26,
                       ),
                       const Gap(12),
                       

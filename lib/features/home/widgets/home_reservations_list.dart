@@ -158,7 +158,7 @@ class _UpcomingReservationCard extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.event_available,
+                            AppIcons.calendarFilled,
                             color: AppColors.white,
                             size: 14,
                           ),

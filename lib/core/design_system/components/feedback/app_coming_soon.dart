@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../design_system.dart';
+import '../../design_system.dart';
 
 class AppComingSoonModal extends StatelessWidget {
   const AppComingSoonModal({
     super.key,
     this.title = 'Bientôt disponible',
     this.description = 'Nous travaillons dur pour vous apporter cette fonctionnalité incroyable. Restez à l\'écoute !',
-    this.icon = AppIcons.rocket,
+    this.icon = AppIcons.info,
   });
 
   final String title;

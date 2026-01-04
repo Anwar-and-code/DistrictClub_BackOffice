@@ -174,7 +174,6 @@ class _ClubInfoCard extends StatelessWidget {
                     children: [
                       const AppLogo(
                         size: AppLogoSize.small,
-                        color: AppColors.brandPrimary,
                       ),
                       const Spacer(),
                       AppBadge(

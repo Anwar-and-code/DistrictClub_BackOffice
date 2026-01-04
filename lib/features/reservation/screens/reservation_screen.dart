@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
 import '../../../core/design_system/design_system.dart';
 
 class ReservationScreen extends StatefulWidget {
@@ -11,6 +12,7 @@ class ReservationScreen extends StatefulWidget {
 class _ReservationScreenState extends State<ReservationScreen> {
   int _currentTab = 0;
   DateTime? _selectedDate;
+  bool _isDateExpanded = true;
   String? _selectedCourt;
   String? _selectedSlot;
 
@@ -159,14 +161,32 @@ class _ReservationScreenState extends State<ReservationScreen> {
           // Step 1: Date selector (always visible)
           Padding(
             padding: AppSpacing.screenPaddingHorizontalOnly,
-            child: _buildStepHeader(
-              step: 1,
-              title: 'Choisir une date',
-              isCompleted: _selectedDate != null,
+            child: GestureDetector(
+              onTap: () {
+                if (!_isDateExpanded) {
+                  setState(() => _isDateExpanded = true);
+                }
+              },
+              child: _buildStepHeader(
+                step: 1,
+                title: 'Choisir une date',
+                isCompleted: _selectedDate != null,
+                showEditAction: !_isDateExpanded,
+              ),
             ),
           ),
           AppSpacing.vGapMd,
-          _buildDateSelector(),
+          
+          AnimatedCrossFade(
+            firstChild: _buildDateSelector(),
+            secondChild: _selectedDate != null 
+                ? _buildSelectedDateSummary() 
+                : const SizedBox.shrink(),
+            crossFadeState: _isDateExpanded 
+                ? CrossFadeState.showFirst 
+                : CrossFadeState.showSecond,
+            duration: AppAnimations.durationNormal,
+          ),
 
           // Step 2: Time slots (visible after date selection)
           if (_selectedDate != null) ...[
@@ -183,29 +203,43 @@ class _ReservationScreenState extends State<ReservationScreen> {
                   ),
                   AppSpacing.vGapMd,
 
-                  // Morning slots (1h)
-                  Text(
-                    'Matinée (1h)',
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  // Morning slots section
+                  _buildPeriodHeader(
+                    icon: Icons.wb_sunny_outlined,
+                    title: 'Matinée',
+                    subtitle: '1h · 15 000 F',
+                    iconColor: AppColors.warning,
                   ),
                   AppSpacing.vGapSm,
-                  _buildTimeSlotGrid(_morningSlots),
-
-                  AppSpacing.vGapLg,
-
-                  // Evening slots (1h30)
-                  Text(
-                    'Soirée (1h30)',
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  AppSpacing.vGapSm,
-                  _buildTimeSlotGrid(_eveningSlots),
                 ],
               ),
+            ),
+            Padding(
+              padding: AppSpacing.screenPaddingHorizontalOnly.copyWith(right: 0),
+              child: _buildTimeSlotTimeline(_morningSlots, periodIcon: '☀️'),
+            ),
+            
+            AppSpacing.vGapLg,
+            
+            Padding(
+              padding: AppSpacing.screenPaddingHorizontalOnly,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Evening slots section
+                  _buildPeriodHeader(
+                    icon: Icons.nights_stay_outlined,
+                    title: 'Soirée',
+                    subtitle: '1h30 · 20 000 - 25 000 F',
+                    iconColor: AppColors.brandSecondary,
+                  ),
+                  AppSpacing.vGapSm,
+                ],
+              ),
+            ),
+            Padding(
+              padding: AppSpacing.screenPaddingHorizontalOnly.copyWith(right: 0),
+              child: _buildTimeSlotTimeline(_eveningSlots, periodIcon: '🌙'),
             ),
           ],
 
@@ -254,6 +288,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
     required int step,
     required String title,
     required bool isCompleted,
+    bool showEditAction = false,
   }) {
     return Row(
       children: [
@@ -277,13 +312,76 @@ class _ReservationScreenState extends State<ReservationScreen> {
           ),
         ),
         AppSpacing.hGapSm,
-        Text(
-          title,
-          style: AppTypography.titleSmall.copyWith(
-            fontWeight: FontWeight.bold,
+        Expanded(
+          child: Text(
+            title,
+            style: AppTypography.titleSmall.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
+        if (showEditAction) ...[
+          Text(
+            'Modifier',
+            style: AppTypography.labelSmall.copyWith(
+              color: AppColors.brandPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ],
+    );
+  }
+
+  Widget _buildSelectedDateSummary() {
+    if (_selectedDate == null) return const SizedBox.shrink();
+    
+    final dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    final monthNames = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    
+    final dateStr = '${dayNames[_selectedDate!.weekday - 1]} ${_selectedDate!.day} ${monthNames[_selectedDate!.month - 1]}';
+
+    return GestureDetector(
+      onTap: () => setState(() => _isDateExpanded = true),
+      child: Container(
+        margin: AppSpacing.screenPaddingHorizontalOnly,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.brandPrimary.withValues(alpha: 0.05),
+          borderRadius: AppRadius.borderRadiusMd,
+          border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_month,
+              color: AppColors.brandPrimary,
+              size: 20,
+            ),
+            AppSpacing.hGapMd,
+            Text(
+              dateStr,
+              style: AppTypography.titleSmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              Icons.edit_outlined,
+              color: AppColors.brandPrimary,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -466,6 +564,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
               isSelected: isSelected,
               onTap: () => setState(() {
                 _selectedDate = date;
+                _isDateExpanded = false; // Collapse after selection
                 // Reset downstream selections when date changes
                 _selectedSlot = null;
                 _selectedCourt = null;
@@ -502,20 +601,68 @@ class _ReservationScreenState extends State<ReservationScreen> {
     );
   }
 
-  Widget _buildTimeSlotGrid(List<TimeSlot> slots) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: slots.map((slot) {
-        final isSelected = _selectedSlot == slot.id;
-        return _TimeSlotChip(
-          slot: slot,
-          isSelected: isSelected,
-          onTap: slot.isAvailable
-              ? () => setState(() => _selectedSlot = slot.id)
-              : null,
-        );
-      }).toList(),
+  Widget _buildPeriodHeader({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color iconColor,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.1),
+            borderRadius: AppRadius.borderRadiusSm,
+          ),
+          child: Icon(icon, color: iconColor, size: 18),
+        ),
+        AppSpacing.hGapSm,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: AppTypography.labelLarge.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Text(
+              subtitle,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeSlotTimeline(List<TimeSlot> slots, {required String periodIcon}) {
+    return SizedBox(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: slots.length,
+        itemBuilder: (context, index) {
+          final slot = slots[index];
+          final isSelected = _selectedSlot == slot.id;
+          return Padding(
+            padding: EdgeInsets.only(
+              right: index < slots.length - 1 ? AppSpacing.sm : 0,
+            ),
+            child: _TimeSlotCard(
+              slot: slot,
+              isSelected: isSelected,
+              periodIcon: periodIcon,
+              onTap: slot.isAvailable
+                  ? () => setState(() => _selectedSlot = slot.id)
+                  : null,
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -665,62 +812,146 @@ class _CourtCard extends StatelessWidget {
   }
 }
 
-class _TimeSlotChip extends StatelessWidget {
-  const _TimeSlotChip({
+class _TimeSlotCard extends StatelessWidget {
+  const _TimeSlotCard({
     required this.slot,
     required this.isSelected,
+    required this.periodIcon,
     this.onTap,
   });
 
   final TimeSlot slot;
   final bool isSelected;
+  final String periodIcon;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final isDisabled = !slot.isAvailable;
+    final timeParts = slot.time.split(' - ');
+    final startTime = timeParts[0];
+    final endTime = timeParts.length > 1 ? timeParts[1] : '';
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: AppAnimations.durationNormal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
+        width: 110,
+        padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
           color: isDisabled
-              ? AppColors.neutral100
+              ? AppColors.surfaceSubtle
               : isSelected
                   ? AppColors.brandPrimary
                   : AppColors.surfaceDefault,
-          borderRadius: AppRadius.borderRadiusSm,
+          borderRadius: AppRadius.borderRadiusMd,
           border: isSelected || isDisabled
               ? null
               : Border.all(color: AppColors.borderDefault),
+          boxShadow: isSelected && !isDisabled
+              ? [
+                  BoxShadow(
+                    color: AppColors.brandPrimary.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              slot.time,
-              style: AppTypography.labelSmall.copyWith(
-                color: isDisabled
-                    ? AppColors.neutral400
-                    : isSelected
-                        ? AppColors.white
-                        : AppColors.textPrimary,
-              ),
+            // Time display
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  startTime,
+                  style: AppTypography.titleSmall.copyWith(
+                    color: isDisabled
+                        ? AppColors.textDisabled
+                        : isSelected
+                            ? AppColors.white
+                            : AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 10,
+                      color: isDisabled
+                          ? AppColors.textDisabled
+                          : isSelected
+                              ? AppColors.white.withValues(alpha: 0.7)
+                              : AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      endTime,
+                      style: AppTypography.caption.copyWith(
+                        color: isDisabled
+                            ? AppColors.textDisabled
+                            : isSelected
+                                ? AppColors.white.withValues(alpha: 0.8)
+                                : AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            AppSpacing.vGapXxs,
-            Text(
-              '${slot.price.toStringAsFixed(0)} F',
-              style: AppTypography.caption.copyWith(
-                color: isDisabled
-                    ? AppColors.neutral400
-                    : isSelected
-                        ? AppColors.white.withValues(alpha: 0.8)
-                        : AppColors.textSecondary,
-              ),
+            // Price badge and status
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDisabled
+                        ? AppColors.neutral200
+                        : isSelected
+                            ? AppColors.white.withValues(alpha: 0.2)
+                            : AppColors.brandPrimary.withValues(alpha: 0.1),
+                    borderRadius: AppRadius.borderRadiusFull,
+                  ),
+                  child: Text(
+                    '${(slot.price / 1000).toStringAsFixed(0)}k F',
+                    style: AppTypography.caption.copyWith(
+                      color: isDisabled
+                          ? AppColors.textDisabled
+                          : isSelected
+                              ? AppColors.white
+                              : AppColors.brandPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+                if (isDisabled)
+                  Icon(
+                    Icons.block,
+                    size: 14,
+                    color: AppColors.error.withValues(alpha: 0.6),
+                  )
+                else if (isSelected)
+                  Icon(
+                    Icons.check_circle,
+                    size: 14,
+                    color: AppColors.white,
+                  )
+                else
+                  Icon(
+                    Icons.radio_button_unchecked,
+                    size: 14,
+                    color: AppColors.neutral300,
+                  ),
+              ],
             ),
           ],
         ),
@@ -742,94 +973,257 @@ class _BookingConfirmationSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: AppSpacing.screenPadding,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDefault,
-        borderRadius: AppRadius.topXxl,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.neutral300,
-              borderRadius: AppRadius.borderRadiusFull,
+    // Determine screen height for max height constraint
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceDefault.withOpacity(0.9),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border(
+              top: BorderSide(color: AppColors.white.withOpacity(0.5), width: 1),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
           ),
-          AppSpacing.vGapLg,
-
-          // Title
-          Text(
-            'Confirmer la réservation',
-            style: AppTypography.titleLarge,
-          ),
-          AppSpacing.vGapXl,
-
-          // Details
-          _buildDetailRow('Terrain', court.name),
-          AppSpacing.vGapMd,
-          _buildDetailRow('Date', '${date.day}/${date.month}/${date.year}'),
-          AppSpacing.vGapMd,
-          _buildDetailRow('Créneau', slot.time),
-          AppSpacing.vGapMd,
-          _buildDetailRow('Prix', '${slot.price.toStringAsFixed(0)} FCFA'),
-
-          AppSpacing.vGapXl,
-
-          // Buttons
-          Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: AppButton(
-                  label: 'Annuler',
-                  onPressed: () => Navigator.pop(context),
-                  variant: AppButtonVariant.outline,
+              // Handle area
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.neutral300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
               ),
-              AppSpacing.hGapMd,
-              Expanded(
-                child: AppButton(
-                  label: 'Confirmer',
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Réservation confirmée !'),
-                        backgroundColor: AppColors.success,
+
+              // Modal Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Text(
+                  'Récapitulatif',
+                  style: AppTypography.titleLarge.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+
+              // Main Content Card
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSubtle.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.neutral200),
+                ),
+                child: Column(
+                  children: [
+                    _buildInfoRow(
+                      context,
+                      icon: Icons.calendar_month_outlined,
+                      label: 'Date',
+                      value: '${date.day}/${date.month}/${date.year}',
+                      iconColor: AppColors.brandSecondary,
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(height: 1, color: AppColors.neutral200),
+                    ),
+                    _buildInfoRow(
+                      context,
+                      icon: Icons.access_time_filled_outlined,
+                      label: 'Créneau',
+                      value: slot.time,
+                      iconColor: AppColors.brandPrimary,
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(height: 1, color: AppColors.neutral200),
+                    ),
+                    _buildInfoRow(
+                      context,
+                      icon: Icons.sports_tennis_outlined,
+                      label: 'Terrain',
+                      value: 'Terrain ${court.name}',
+                      iconColor: AppColors.success,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Price Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Total à payer',
+                      style: AppTypography.bodyLarge.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
                       ),
-                    );
-                  },
-                  variant: AppButtonVariant.primary,
+                    ),
+                    Text(
+                      '${slot.price.toStringAsFixed(0)} FCFA',
+                      style: AppTypography.headlineMedium.copyWith(
+                        color: AppColors.brandPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Action Buttons
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: const BorderSide(color: AppColors.neutral300),
+                          ),
+                          backgroundColor: Colors.transparent,
+                        ),
+                        child: Text(
+                          'Annuler',
+                          style: AppTypography.labelLarge.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.brandPrimary.withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Réservation confirmée avec succès !'),
+                                backgroundColor: AppColors.success,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Confirmer',
+                                style: AppTypography.labelLarge.copyWith(
+                                  color: AppColors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_forward_rounded, color: AppColors.white, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-
-          AppSpacing.vGapLg,
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildInfoRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color iconColor,
+  }) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
           ),
+          child: Icon(icon, color: iconColor, size: 20),
         ),
-        Text(
-          value,
-          style: AppTypography.bodyMedium.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: AppTypography.titleSmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ],
     );
