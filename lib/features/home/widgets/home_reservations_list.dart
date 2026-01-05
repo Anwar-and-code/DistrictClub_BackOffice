@@ -7,6 +7,188 @@ class HomeReservationsList extends StatelessWidget {
   // Sample data - in real app, this would come from a service
   static const int _upcomingCount = 1;
 
+  void _showReservationDetails(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.backgroundPrimary,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderDefault,
+                      borderRadius: AppRadius.borderRadiusFull,
+                    ),
+                  ),
+                ),
+                AppSpacing.vGapLg,
+                
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: AppColors.brandSecondary,
+                        borderRadius: AppRadius.borderRadiusMd,
+                      ),
+                      child: Center(
+                        child: Text(
+                          'A',
+                          style: AppTypography.headlineMedium.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    AppSpacing.hGapMd,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Terrain A',
+                            style: AppTypography.titleLarge.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'PadelHouse Cocody',
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AppBadge(
+                      label: 'Confirmé',
+                      variant: AppBadgeVariant.success,
+                    ),
+                  ],
+                ),
+                
+                AppSpacing.vGapXl,
+                
+                // Details
+                _DetailRow(icon: Icons.calendar_today, label: 'Date', value: 'Mercredi 8 Janvier 2026'),
+                _DetailRow(icon: Icons.access_time, label: 'Horaire', value: '19:00 - 20:30'),
+                _DetailRow(icon: Icons.timer, label: 'Durée', value: '1h30'),
+                _DetailRow(icon: Icons.payments, label: 'Montant', value: '25 000 F CFA'),
+                _DetailRow(icon: Icons.confirmation_number, label: 'Référence', value: 'WP-X0126'),
+                
+                AppSpacing.vGapXl,
+                
+                // QR Code section
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSubtle,
+                    borderRadius: AppRadius.borderRadiusMd,
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.qr_code_2, size: 80, color: AppColors.brandPrimary),
+                      AppSpacing.vGapSm,
+                      Text(
+                        'Présentez ce QR code à l\'accueil',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                AppSpacing.vGapXl,
+                
+                // Actions
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        label: 'Modifier',
+                        variant: AppButtonVariant.outline,
+                        icon: Icons.edit,
+                        onPressed: () {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Redirection vers la modification...'),
+                              backgroundColor: AppColors.brandPrimary,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    AppSpacing.hGapMd,
+                    Expanded(
+                      child: AppButton(
+                        label: 'Annuler',
+                        variant: AppButtonVariant.outline,
+                        icon: Icons.close,
+                        onPressed: () {
+                          Navigator.pop(context);
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: Text('Annuler la réservation ?'),
+                              content: Text('Vous pouvez annuler gratuitement jusqu\'à 24h avant.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: Text('Non'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Réservation annulée'),
+                                        backgroundColor: AppColors.warning,
+                                      ),
+                                    );
+                                  },
+                                  child: Text('Oui, annuler', style: TextStyle(color: AppColors.error)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                
+                AppSpacing.vGapLg,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -50,7 +232,7 @@ class HomeReservationsList extends StatelessWidget {
             endTime: '20:30',
             price: '25 000 F',
             onTap: () {
-              AppComingSoonModal.show(context);
+              _showReservationDetails(context);
             },
           ),
           AppSpacing.vGapLg,
@@ -116,8 +298,8 @@ class _UpcomingReservationCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.brandSecondary,
-            AppColors.brandSecondary.withValues(alpha: 0.8),
+            AppColors.brandOlive,
+            AppColors.brandOlive.withValues(alpha: 0.8),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -125,7 +307,7 @@ class _UpcomingReservationCard extends StatelessWidget {
         borderRadius: AppRadius.borderRadiusMd,
         boxShadow: [
           BoxShadow(
-            color: AppColors.brandSecondary.withValues(alpha: 0.3),
+            color: AppColors.brandOlive.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -198,7 +380,7 @@ class _UpcomingReservationCard extends StatelessWidget {
                         child: Text(
                           courtName,
                           style: AppTypography.headlineSmall.copyWith(
-                            color: AppColors.brandSecondary,
+                            color: AppColors.brandOlive,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -367,6 +549,44 @@ class _ReservationCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.iconSecondary),
+          AppSpacing.hGapMd,
+          Text(
+            label,
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: AppTypography.bodyMedium.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

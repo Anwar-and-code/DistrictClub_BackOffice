@@ -4,6 +4,7 @@ import '../widgets/home_banner_carousel.dart';
 import '../widgets/home_action_cards.dart';
 import '../widgets/home_reservations_list.dart';
 import '../../profile/screens/profile_screen.dart';
+import '../../profile/screens/notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -35,10 +36,10 @@ class HomeScreen extends StatelessWidget {
                       child: AppIconButton(
                         icon: AppIcons.notification,
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('3 nouvelles notifications'),
-                              backgroundColor: AppColors.brandPrimary,
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
                             ),
                           );
                         },

@@ -21,6 +21,9 @@ abstract final class AppColors {
   /// Tertiary brand color - Warm Beige
   static const Color brandTertiary = Color(0xFFD4C4A8);
 
+  /// Brand Olive - The green color we have
+  static const Color brandOlive = Color(0xFF6D672B);
+
   // ==========================================================================
   // PRIMITIVE COLORS (Raw color values)
   // ==========================================================================
@@ -80,7 +83,7 @@ abstract final class AppColors {
   // ==========================================================================
   
   // --- Background Colors ---
-  static const Color backgroundPrimary = white;
+  static const Color backgroundPrimary = Color(0xFFFFF9F3);
   static const Color backgroundSecondary = neutral50;
   static const Color backgroundTertiary = neutral100;
   static const Color backgroundElevated = white;

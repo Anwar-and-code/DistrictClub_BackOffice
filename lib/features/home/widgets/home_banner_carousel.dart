@@ -71,7 +71,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
                     );
                   },
                   onTap: () {
-                    AppComingSoonModal.show(context);
+                    _showBannerDetails(context, _banners[index]);
                   },
                 ),
               );
@@ -84,6 +84,121 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
           currentIndex: _currentPage,
         ),
       ],
+    );
+  }
+
+  void _showBannerDetails(BuildContext context, BannerItem banner) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.backgroundPrimary,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: AppRadius.cardBorderRadius,
+              child: Image.network(
+                banner.imageUrl,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            AppSpacing.vGapLg,
+            Text(
+              banner.title,
+              style: AppTypography.headlineSmall.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            AppSpacing.vGapMd,
+            Text(
+              _getBannerDescription(banner.title),
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            AppSpacing.vGapLg,
+            AppButton(
+              label: _getBannerAction(banner.title),
+              isFullWidth: true,
+              onPressed: () {
+                Navigator.pop(context);
+                _handleBannerAction(context, banner.title);
+              },
+            ),
+            AppSpacing.vGapLg,
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getBannerDescription(String title) {
+    switch (title) {
+      case 'Réservez votre terrain':
+        return 'Réservez facilement votre terrain de padel en quelques clics. Choisissez la date, l\'heure et le terrain de votre choix.';
+      case 'Tournoi ce weekend':
+        return 'Participez à notre tournoi amical ce weekend ! Inscriptions ouvertes pour tous les niveaux.';
+      case 'Cours de padel':
+        return 'Améliorez votre technique avec nos cours dispensés par des professionnels certifiés.';
+      case 'Nouveaux équipements':
+        return 'Découvrez nos derniers équipements : raquettes, balles et accessoires de qualité.';
+      case 'Club PadelHouse':
+        return 'Rejoignez le club PadelHouse et profitez d\'avantages exclusifs et de tarifs préférentiels.';
+      default:
+        return 'Découvrez cette offre exclusive chez PadelHouse.';
+    }
+  }
+
+  String _getBannerAction(String title) {
+    switch (title) {
+      case 'Réservez votre terrain':
+        return 'Réserver maintenant';
+      case 'Tournoi ce weekend':
+        return 'S\'inscrire au tournoi';
+      case 'Cours de padel':
+        return 'Voir les cours';
+      case 'Nouveaux équipements':
+        return 'Voir les équipements';
+      case 'Club PadelHouse':
+        return 'Rejoindre le club';
+      default:
+        return 'En savoir plus';
+    }
+  }
+
+  void _handleBannerAction(BuildContext context, String title) {
+    String message;
+    switch (title) {
+      case 'Réservez votre terrain':
+        message = 'Redirection vers les réservations...';
+        break;
+      case 'Tournoi ce weekend':
+        Navigator.pushNamed(context, '/tournaments');
+        return;
+      case 'Cours de padel':
+        message = 'Les cours seront bientôt disponibles !';
+        break;
+      case 'Nouveaux équipements':
+        message = 'Boutique bientôt disponible !';
+        break;
+      case 'Club PadelHouse':
+        message = 'Inscription au club en cours...';
+        break;
+      default:
+        message = 'Action en cours...';
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.brandPrimary,
+      ),
     );
   }
 }

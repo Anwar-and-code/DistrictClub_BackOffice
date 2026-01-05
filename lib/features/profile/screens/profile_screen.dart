@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
+import 'settings_screen.dart';
+import 'personal_info_screen.dart';
+import 'favorites_screen.dart';
+import 'help_center_screen.dart';
+import 'about_screen.dart';
+import 'legal_screen.dart';
+import 'notifications_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -38,7 +45,10 @@ class ProfileScreen extends StatelessWidget {
                     AppIconButton(
                       icon: AppIcons.settings,
                       onPressed: () {
-                        AppComingSoonModal.show(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        );
                       },
                       variant: AppButtonVariant.ghost,
                     ),
@@ -290,7 +300,10 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: AppIcons.profile,
           title: 'Informations personnelles',
           onTap: () {
-            AppComingSoonModal.show(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PersonalInfoScreen()),
+            );
           },
         ),
         _MenuItem(
@@ -318,18 +331,21 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: AppIcons.favorite,
           title: 'Favoris',
           onTap: () {
-            AppComingSoonModal.show(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FavoritesScreen()),
+            );
           },
         ),
         _MenuItem(
           icon: AppIcons.notification,
           title: 'Notifications',
-          trailing: Switch(
-            value: true,
-            onChanged: (value) {},
-            activeThumbColor: AppColors.brandPrimary,
-          ),
-          showChevron: false,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            );
+          },
         ),
 
         AppSpacing.vGapXl,
@@ -343,21 +359,82 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: AppIcons.help,
           title: 'Centre d\'aide',
           onTap: () {
-            AppComingSoonModal.show(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HelpCenterScreen()),
+            );
           },
         ),
         _MenuItem(
           icon: AppIcons.info,
           title: 'À propos',
           onTap: () {
-            AppComingSoonModal.show(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AboutScreen()),
+            );
           },
         ),
         _MenuItem(
           icon: AppIcons.share,
           title: 'Partager l\'application',
           onTap: () {
-            AppComingSoonModal.show(context);
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: AppColors.backgroundPrimary,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+              ),
+              builder: (context) => Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Partager PadelHouse',
+                      style: AppTypography.headlineSmall,
+                    ),
+                    AppSpacing.vGapMd,
+                    Text(
+                      'Invitez vos amis à rejoindre la communauté PadelHouse !',
+                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                      textAlign: TextAlign.center,
+                    ),
+                    AppSpacing.vGapLg,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _ShareOption(icon: Icons.message, label: 'SMS', onTap: () {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Lien copié !'), backgroundColor: AppColors.success),
+                          );
+                        }),
+                        _ShareOption(icon: Icons.email, label: 'Email', onTap: () {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Lien copié !'), backgroundColor: AppColors.success),
+                          );
+                        }),
+                        _ShareOption(icon: Icons.copy, label: 'Copier', onTap: () {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Lien copié dans le presse-papier'), backgroundColor: AppColors.success),
+                          );
+                        }),
+                        _ShareOption(icon: Icons.more_horiz, label: 'Plus', onTap: () {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Partage...'), backgroundColor: AppColors.brandPrimary),
+                          );
+                        }),
+                      ],
+                    ),
+                    AppSpacing.vGapLg,
+                  ],
+                ),
+              ),
+            );
           },
         ),
 
@@ -372,14 +449,20 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: Icons.description_outlined,
           title: 'Conditions d\'utilisation',
           onTap: () {
-            AppComingSoonModal.show(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
+            );
           },
         ),
         _MenuItem(
           icon: Icons.privacy_tip_outlined,
           title: 'Politique de confidentialité',
           onTap: () {
-            AppComingSoonModal.show(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+            );
           },
         ),
       ],
@@ -452,6 +535,43 @@ class _MenuItem extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ShareOption extends StatelessWidget {
+  const _ShareOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.brandPrimary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.brandPrimary),
+          ),
+          AppSpacing.vGapXs,
+          Text(
+            label,
+            style: AppTypography.caption,
+          ),
+        ],
       ),
     );
   }

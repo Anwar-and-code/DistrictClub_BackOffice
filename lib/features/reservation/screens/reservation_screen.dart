@@ -973,23 +973,20 @@ class _BookingConfirmationSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Determine screen height for max height constraint
-    final screenHeight = MediaQuery.of(context).size.height;
-
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.surfaceDefault.withOpacity(0.9),
+            color: AppColors.surfaceDefault.withValues(alpha: 0.9),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
             border: Border(
-              top: BorderSide(color: AppColors.white.withOpacity(0.5), width: 1),
+              top: BorderSide(color: AppColors.white.withValues(alpha: 0.5), width: 1),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 20,
                 offset: const Offset(0, -5),
               ),
@@ -1032,7 +1029,7 @@ class _BookingConfirmationSheet extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 24),
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceSubtle.withOpacity(0.5),
+                  color: AppColors.surfaceSubtle.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: AppColors.neutral200),
                 ),
@@ -1134,7 +1131,7 @@ class _BookingConfirmationSheet extends StatelessWidget {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.brandPrimary.withOpacity(0.3),
+                              color: AppColors.brandPrimary.withValues(alpha: 0.3),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -1199,7 +1196,7 @@ class _BookingConfirmationSheet extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.1),
+            color: iconColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: iconColor, size: 20),
