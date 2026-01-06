@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/router/page_transitions.dart';
+import '../../auth/screens/email_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -55,7 +57,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _navigateToAuth() {
-    Navigator.of(context).pushReplacementNamed('/auth/email');
+    // Use phase transition for this milestone navigation (onboarding → auth)
+    context.navigatePhase(
+      const EmailScreen(),
+      routeName: '/auth/email',
+      replace: true,
+    );
   }
 
   @override

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/router/page_transitions.dart';
+import 'register_screen.dart';
+import 'onboarding_name_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
@@ -65,11 +68,17 @@ class _OtpScreenState extends State<OtpScreen> {
       setState(() => _isVerifying = false);
       
       if (widget.isLogin) {
-        // Login -> Go to main app
-        Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
+        // Login -> Go to onboarding flow (slide transition)
+        context.navigateSlide(
+          OnboardingNameScreen(email: widget.email),
+          routeName: '/auth/onboarding/name',
+        );
       } else {
-        // Register -> Go to complete profile
-        Navigator.of(context).pushNamed('/auth/register');
+        // Register -> Go to complete profile (slide transition)
+        context.navigateSlide(
+          const RegisterScreen(),
+          routeName: '/auth/register',
+        );
       }
     }
   }

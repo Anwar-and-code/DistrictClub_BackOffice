@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
 
-class HomeReservationsList extends StatelessWidget {
-  const HomeReservationsList({super.key});
+// Widget for active/upcoming reservation only
+class HomeActiveReservation extends StatelessWidget {
+  const HomeActiveReservation({super.key});
 
   // Sample data - in real app, this would come from a service
   static const int _upcomingCount = 1;
@@ -191,6 +192,10 @@ class HomeReservationsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_upcomingCount == 0) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -224,21 +229,30 @@ class HomeReservationsList extends StatelessWidget {
         AppSpacing.vGapMd,
 
         // Upcoming reservation highlight
-        if (_upcomingCount > 0) ...[
-          _UpcomingReservationCard(
-            courtName: 'A',
-            date: 'Mer 8 Jan',
-            startTime: '19:00',
-            endTime: '20:30',
-            price: '25 000 F',
-            onTap: () {
-              _showReservationDetails(context);
-            },
-          ),
-          AppSpacing.vGapLg,
-        ],
+        _UpcomingReservationCard(
+          courtName: 'A',
+          date: 'Mer 8 Jan',
+          startTime: '19:00',
+          endTime: '20:30',
+          price: '25 000 F',
+          onTap: () {
+            _showReservationDetails(context);
+          },
+        ),
+      ],
+    );
+  }
+}
 
-        // Past reservations
+// Widget for reservation history
+class HomeReservationsHistory extends StatelessWidget {
+  const HomeReservationsHistory({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Text(
           'Historique récent',
           style: AppTypography.labelMedium.copyWith(

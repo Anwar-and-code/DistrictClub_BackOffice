@@ -112,7 +112,6 @@ class _NavBarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: AppRadius.borderRadiusMd,
       child: AnimatedContainer(
         duration: AppAnimations.navBarDuration,
         curve: AppAnimations.navBarCurve,
@@ -121,10 +120,13 @@ class _NavBarItem extends StatelessWidget {
           vertical: AppSpacing.xs,
         ),
         decoration: BoxDecoration(
-          color: isActive 
-              ? AppColors.navBarItemActiveBackground 
-              : Colors.transparent,
-          borderRadius: AppRadius.borderRadiusMd,
+          color: Colors.transparent,
+          border: Border(
+            top: BorderSide(
+              color: isActive ? AppColors.navBarItemActive : Colors.transparent,
+              width: 3.0,
+            ),
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

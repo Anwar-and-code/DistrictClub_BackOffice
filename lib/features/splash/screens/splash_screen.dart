@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/router/page_transitions.dart';
+import '../../onboarding/screens/onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -32,10 +34,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     
     _controller.forward();
     
-    // Navigate after the total animation duration
+    // Navigate after the total animation duration with phase transition
     Future.delayed(const Duration(milliseconds: 2800), () {
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/onboarding');
+        context.navigatePhase(
+          const OnboardingScreen(),
+          routeName: '/onboarding',
+          replace: true,
+        );
       }
     });
   }

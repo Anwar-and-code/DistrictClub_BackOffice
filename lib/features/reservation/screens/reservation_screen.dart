@@ -21,24 +21,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
   String? _selectedSlot;
 
   final List<Booking> _bookingHistory = [
-    Booking(
-      reference: 'WP-X0125',
-      courtName: 'A',
-      date: DateTime.now().subtract(const Duration(days: 2)),
-      startTime: '13:00',
-      endTime: '14:00',
-      price: 15000,
-      status: BookingStatus.completed,
-    ),
-    Booking(
-      reference: 'WP-X0124',
-      courtName: 'B',
-      date: DateTime.now().subtract(const Duration(days: 5)),
-      startTime: '16:00',
-      endTime: '17:30',
-      price: 20000,
-      status: BookingStatus.completed,
-    ),
+    // Upcoming
     Booking(
       reference: 'WP-X0123',
       courtName: 'A',
@@ -48,23 +31,63 @@ class _ReservationScreenState extends State<ReservationScreen> {
       price: 25000,
       status: BookingStatus.upcoming,
     ),
+    // Yesterday
     Booking(
-      reference: 'WP-X0122',
+      reference: 'WP-X0125',
+      courtName: 'A',
+      date: DateTime.now().subtract(const Duration(days: 1)),
+      startTime: '13:00',
+      endTime: '14:00',
+      price: 15000,
+      status: BookingStatus.completed,
+    ),
+    Booking(
+      reference: 'WP-X0126',
+      courtName: 'B',
+      date: DateTime.now().subtract(const Duration(days: 1)),
+      startTime: '16:00',
+      endTime: '17:30',
+      price: 20000,
+      status: BookingStatus.completed,
+    ),
+    // 3 days ago
+    Booking(
+      reference: 'WP-X0124',
       courtName: 'D',
-      date: DateTime.now().subtract(const Duration(days: 10)),
+      date: DateTime.now().subtract(const Duration(days: 3)),
       startTime: '10:00',
       endTime: '11:00',
       price: 15000,
       status: BookingStatus.completed,
     ),
+    // 7 days ago
     Booking(
-      reference: 'WP-X0121',
+      reference: 'WP-X0122',
       courtName: 'C',
-      date: DateTime.now().subtract(const Duration(days: 15)),
+      date: DateTime.now().subtract(const Duration(days: 7)),
       startTime: '14:00',
       endTime: '15:00',
       price: 15000,
+      status: BookingStatus.completed,
+    ),
+    // 15 days ago
+    Booking(
+      reference: 'WP-X0121',
+      courtName: 'A',
+      date: DateTime.now().subtract(const Duration(days: 15)),
+      startTime: '18:00',
+      endTime: '19:30',
+      price: 20000,
       status: BookingStatus.cancelled,
+    ),
+    Booking(
+      reference: 'WP-X0120',
+      courtName: 'B',
+      date: DateTime.now().subtract(const Duration(days: 15)),
+      startTime: '09:00',
+      endTime: '10:00',
+      price: 10000,
+      status: BookingStatus.completed,
     ),
   ];
 
@@ -125,10 +148,14 @@ class _ReservationScreenState extends State<ReservationScreen> {
   Widget _buildTabSelector() {
     return Container(
       margin: AppSpacing.screenPaddingHorizontalOnly,
-      height: 56, // Fixed height for consistency
+      height: 52,
       decoration: BoxDecoration(
         color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(16), // Softer, more modern radius
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.borderDefault,
+          width: 1,
+        ),
       ),
       child: Stack(
         children: [
@@ -171,13 +198,13 @@ class _ReservationScreenState extends State<ReservationScreen> {
                   child: Center(
                     child: AnimatedDefaultTextStyle(
                       duration: AppAnimations.durationNormal,
-                      style: AppTypography.labelLarge.copyWith(
+                      style: AppTypography.labelMedium.copyWith(
                         color: _currentTab == 0 
                             ? AppColors.white 
                             : AppColors.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
-                      child: const Text('Nouvelle réservation'),
+                      child: const Text('Réserver'),
                     ),
                   ),
                 ),
@@ -197,7 +224,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
                       children: [
                         AnimatedDefaultTextStyle(
                           duration: AppAnimations.durationNormal,
-                          style: AppTypography.labelLarge.copyWith(
+                          style: AppTypography.labelMedium.copyWith(
                             color: _currentTab == 1 
                                 ? AppColors.white 
                                 : AppColors.textSecondary,
@@ -564,13 +591,55 @@ class _ReservationScreenState extends State<ReservationScreen> {
     );
   }
 
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final bookingDate = DateTime(date.year, date.month, date.day);
+    
+    final monthNames = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    
+    if (bookingDate.isAtSameMomentAs(today)) {
+      return 'Aujourd\'hui';
+    } else if (bookingDate.isAtSameMomentAs(yesterday)) {
+      return 'Hier';
+    } else {
+      return 'le ${date.day.toString().padLeft(2, '0')} ${monthNames[date.month - 1]} ${date.year}';
+    }
+  }
+
+  Map<String, List<Booking>> _groupBookingsByDate(List<Booking> bookings) {
+    final Map<String, List<Booking>> grouped = {};
+    for (var booking in bookings) {
+      final dateKey = DateTime(booking.date.year, booking.date.month, booking.date.day).toString();
+      if (!grouped.containsKey(dateKey)) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey]!.add(booking);
+    }
+    return grouped;
+  }
+
   Widget _buildHistoryTab() {
+    // Sort upcoming bookings by date (earliest first)
     final upcomingBookings = _bookingHistory
         .where((b) => b.status == BookingStatus.upcoming)
-        .toList();
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    
+    // Sort past bookings by date (most recent first)
     final pastBookings = _bookingHistory
         .where((b) => b.status != BookingStatus.upcoming)
-        .toList();
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    
+    // Group past bookings by date
+    final groupedPastBookings = _groupBookingsByDate(pastBookings);
+    final sortedDateKeys = groupedPastBookings.keys.toList()
+      ..sort((a, b) => DateTime.parse(b).compareTo(DateTime.parse(a)));
 
     return SingleChildScrollView(
       child: Column(
@@ -578,67 +647,48 @@ class _ReservationScreenState extends State<ReservationScreen> {
         children: [
           AppSpacing.vGapLg,
           
-          // Upcoming reservations section with highlight
+          // Upcoming reservations section - clean professional header
           if (upcomingBookings.isNotEmpty) ...[
             Padding(
               padding: AppSpacing.screenPaddingHorizontalOnly,
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.brandSecondary.withValues(alpha: 0.1),
-                  borderRadius: AppRadius.borderRadiusMd,
-                  border: Border.all(
-                    color: AppColors.brandSecondary.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.brandSecondary,
-                            borderRadius: AppRadius.borderRadiusFull,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.event_available,
-                                color: AppColors.white,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '${upcomingBookings.length} réservation${upcomingBookings.length > 1 ? 's' : ''} à venir',
-                                style: AppTypography.labelMedium.copyWith(
-                                  color: AppColors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+              child: Row(
+                children: [
+                  Text(
+                    'À venir',
+                    style: AppTypography.titleSmall.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    AppSpacing.vGapMd,
-                    ...upcomingBookings.map((booking) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: _BookingHistoryCard(
-                        booking: booking,
-                        isHighlighted: true,
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandSecondary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${upcomingBookings.length}',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.bold,
                       ),
-                    )),
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            AppSpacing.vGapXl,
+            AppSpacing.vGapMd,
+            ...upcomingBookings.map((booking) => Padding(
+              padding: AppSpacing.screenPaddingHorizontalOnly,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: _BookingHistoryCard(booking: booking),
+              ),
+            )),
+            AppSpacing.vGapLg,
           ] else ...[
             // Empty state for no upcoming reservations
             Padding(
@@ -681,14 +731,14 @@ class _ReservationScreenState extends State<ReservationScreen> {
                 ),
               ),
             ),
-            AppSpacing.vGapXl,
+            AppSpacing.vGapLg,
           ],
 
-          // Past reservations
+          // Past reservations - grouped by date with headers
           Padding(
             padding: AppSpacing.screenPaddingHorizontalOnly,
             child: Text(
-              'Historique',
+              'Terminées',
               style: AppTypography.titleSmall.copyWith(
                 fontWeight: FontWeight.bold,
               ),
@@ -706,13 +756,36 @@ class _ReservationScreenState extends State<ReservationScreen> {
               ),
             )
           else
-            ...pastBookings.map((booking) => Padding(
-              padding: AppSpacing.screenPaddingHorizontalOnly,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: _BookingHistoryCard(booking: booking),
-              ),
-            )),
+            ...sortedDateKeys.expand((dateKey) {
+              final date = DateTime.parse(dateKey);
+              final bookingsForDate = groupedPastBookings[dateKey]!;
+              return [
+                // Date header
+                Padding(
+                  padding: AppSpacing.screenPaddingHorizontalOnly,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Text(
+                      _formatDateHeader(date),
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                // Bookings for this date
+                ...bookingsForDate.map((booking) => Padding(
+                  padding: AppSpacing.screenPaddingHorizontalOnly,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _BookingHistoryCard(booking: booking),
+                  ),
+                )),
+                // Extra spacing between date groups
+                AppSpacing.vGapSm,
+              ];
+            }),
           
           AppSpacing.vGapXxl,
         ],
@@ -1356,39 +1429,35 @@ class TimeSlot {
 class _BookingHistoryCard extends StatelessWidget {
   const _BookingHistoryCard({
     required this.booking,
-    this.isHighlighted = false,
   });
 
   final Booking booking;
-  final bool isHighlighted;
 
-  @override
-  Widget build(BuildContext context) {
+  String _formatDate(DateTime date) {
     final monthNames = [
       'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
       'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'
     ];
-    final dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    return '${date.day} ${monthNames[date.month - 1]} ${date.year}';
+  }
 
+  String _formatPrice(double price) {
+    final priceInt = price.toInt();
+    if (priceInt >= 1000) {
+      return '${(priceInt / 1000).toStringAsFixed(priceInt % 1000 == 0 ? 0 : 0)} 000 F';
+    }
+    return '$priceInt F';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: isHighlighted ? AppColors.white : AppColors.cardBackground,
+        color: AppColors.cardBackground,
         borderRadius: AppRadius.cardBorderRadius,
         border: Border.all(
-          color: isHighlighted 
-              ? AppColors.brandSecondary 
-              : AppColors.reservationCardBorder,
-          width: isHighlighted ? 2 : 1,
+          color: AppColors.reservationCardBorder,
         ),
-        boxShadow: isHighlighted
-            ? [
-                BoxShadow(
-                  color: AppColors.brandSecondary.withValues(alpha: 0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
       ),
       child: Material(
         color: Colors.transparent,
@@ -1398,135 +1467,90 @@ class _BookingHistoryCard extends StatelessWidget {
             // Show booking details
           },
           borderRadius: AppRadius.cardBorderRadius,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              children: [
-                // Date badge
-                Container(
-                  width: 60,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.sm,
-                  ),
-                  decoration: BoxDecoration(
-                    color: booking.status == BookingStatus.upcoming
-                        ? AppColors.brandSecondary
-                        : booking.status == BookingStatus.cancelled
-                            ? AppColors.neutral400
-                            : AppColors.brandPrimary,
-                    borderRadius: AppRadius.borderRadiusSm,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        dayNames[booking.date.weekday - 1],
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      Text(
-                        booking.date.day.toString(),
-                        style: AppTypography.titleLarge.copyWith(
-                          color: AppColors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        monthNames[booking.date.month - 1],
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ],
+          child: Row(
+            children: [
+              // Time badge on the left
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm + 2,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.reservationTimeBadge,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(AppRadius.card - 1),
+                    bottomLeft: Radius.circular(AppRadius.card - 1),
                   ),
                 ),
-                AppSpacing.hGapMd,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      booking.startTime,
+                      style: AppTypography.titleMedium.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      booking.endTime,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.white.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-                // Details
-                Expanded(
+              // Details
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                              borderRadius: AppRadius.borderRadiusSm,
-                            ),
-                            child: Text(
-                              'Terrain ${booking.courtName}',
-                              style: AppTypography.labelMedium.copyWith(
-                                color: AppColors.brandPrimary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          AppBadge(
-                            label: booking.status.label,
-                            variant: booking.status.badgeVariant,
-                          ),
-                        ],
-                      ),
-                      AppSpacing.vGapSm,
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 14,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(width: 4),
                           Text(
-                            '${booking.startTime} - ${booking.endTime}',
-                            style: AppTypography.bodyMedium.copyWith(
-                              fontWeight: FontWeight.w500,
+                            'Terrain ${booking.courtName}',
+                            style: AppTypography.labelMedium.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            '  •  ${_formatDate(booking.date)}',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
                       ),
                       AppSpacing.vGapXxs,
-                      Row(
-                        children: [
-                          Text(
-                            '${booking.price.toStringAsFixed(0)} FCFA',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          Text(
-                            '  •  ',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                          Text(
-                            'Réf: ${booking.reference}',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        '${_formatPrice(booking.price)}  •  Réf: ${booking.reference}',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ],
                   ),
                 ),
+              ),
 
-                // Arrow
-                Icon(
+              // Arrow
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.md),
+                child: Icon(
                   AppIcons.chevronRight,
                   color: AppColors.iconTertiary,
                   size: AppIcons.sizeMd,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

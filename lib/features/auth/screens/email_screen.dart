@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/router/page_transitions.dart';
 import 'otp_screen.dart';
 
 class EmailScreen extends StatefulWidget {
@@ -34,14 +35,13 @@ class _EmailScreenState extends State<EmailScreen> {
     if (mounted) {
       setState(() => _isLoading = false);
       
-      // Navigate to OTP screen
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => OtpScreen(
-            email: _emailController.text,
-            isLogin: true,
-          ),
+      // Navigate to OTP screen with slide transition (hierarchical navigation)
+      context.navigateSlide(
+        OtpScreen(
+          email: _emailController.text,
+          isLogin: true,
         ),
+        routeName: '/auth/otp',
       );
     }
   }

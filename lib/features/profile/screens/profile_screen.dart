@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/router/page_transitions.dart';
+import '../../../features/auth/screens/email_screen.dart';
 import 'settings_screen.dart';
 import 'personal_info_screen.dart';
 import 'favorites_screen.dart';
@@ -45,9 +47,9 @@ class ProfileScreen extends StatelessWidget {
                     AppIconButton(
                       icon: AppIcons.settings,
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        context.navigateSlide(
+                          const SettingsScreen(),
+                          routeName: '/settings',
                         );
                       },
                       variant: AppButtonVariant.ghost,
@@ -119,8 +121,13 @@ class ProfileScreen extends StatelessWidget {
                           TextButton(
                             onPressed: () {
                               Navigator.pop(context);
-                              Navigator.of(context).pushNamedAndRemoveUntil(
-                                '/auth/email',
+                              // Logout uses phase transition (milestone)
+                              Navigator.of(context).pushAndRemoveUntil(
+                                AppPageRoute(
+                                  page: const EmailScreen(),
+                                  transitionType: PageTransitionType.phase,
+                                  settings: const RouteSettings(name: '/auth/email'),
+                                ),
                                 (route) => false,
                               );
                             },
@@ -300,9 +307,9 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: AppIcons.profile,
           title: 'Informations personnelles',
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PersonalInfoScreen()),
+            context.navigateSlide(
+              const PersonalInfoScreen(),
+              routeName: '/profile/personal-info',
             );
           },
         ),
@@ -331,9 +338,9 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: AppIcons.favorite,
           title: 'Favoris',
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const FavoritesScreen()),
+            context.navigateSlide(
+              const FavoritesScreen(),
+              routeName: '/profile/favorites',
             );
           },
         ),
@@ -341,9 +348,9 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: AppIcons.notification,
           title: 'Notifications',
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            context.navigateSlide(
+              const NotificationsScreen(),
+              routeName: '/notifications',
             );
           },
         ),
@@ -359,9 +366,9 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: AppIcons.help,
           title: 'Centre d\'aide',
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HelpCenterScreen()),
+            context.navigateSlide(
+              const HelpCenterScreen(),
+              routeName: '/help',
             );
           },
         ),
@@ -369,9 +376,9 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: AppIcons.info,
           title: 'À propos',
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AboutScreen()),
+            context.navigateSlide(
+              const AboutScreen(),
+              routeName: '/about',
             );
           },
         ),
@@ -449,9 +456,9 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: Icons.description_outlined,
           title: 'Conditions d\'utilisation',
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()),
+            context.navigateSlide(
+              const TermsOfServiceScreen(),
+              routeName: '/legal/terms',
             );
           },
         ),
@@ -459,9 +466,9 @@ class _ProfileMenuSection extends StatelessWidget {
           icon: Icons.privacy_tip_outlined,
           title: 'Politique de confidentialité',
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+            context.navigateSlide(
+              const PrivacyPolicyScreen(),
+              routeName: '/legal/privacy',
             );
           },
         ),

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/router/page_transitions.dart';
 import '../widgets/home_banner_carousel.dart';
 import '../widgets/home_action_cards.dart';
 import '../widgets/home_reservations_list.dart';
 import '../../profile/screens/profile_screen.dart';
 import '../../profile/screens/notifications_screen.dart';
+import '../../gamification/widgets/user_progress_ring.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -36,11 +38,9 @@ class HomeScreen extends StatelessWidget {
                       child: AppIconButton(
                         icon: AppIcons.notification,
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const NotificationsScreen(),
-                            ),
+                          context.navigateSlide(
+                            const NotificationsScreen(),
+                            routeName: '/notifications',
                           );
                         },
                         variant: AppButtonVariant.ghost,
@@ -58,12 +58,12 @@ class HomeScreen extends StatelessWidget {
                   greeting: 'Hello,',
                   avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80',
                   onAvatarTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const ProfileScreen(),
-                      ),
+                    context.navigateSlide(
+                      const ProfileScreen(),
+                      routeName: '/profile',
                     );
                   },
+                  trailing: const UserProgressRing(size: 46),
                 ),
               ),
 
@@ -71,6 +71,14 @@ class HomeScreen extends StatelessWidget {
 
               // Banner Carousel
               const HomeBannerCarousel(),
+
+              AppSpacing.vGapXl,
+
+              // Réservation en cours (priorité)
+              const Padding(
+                padding: AppSpacing.screenPaddingHorizontalOnly,
+                child: HomeActiveReservation(),
+              ),
 
               AppSpacing.vGapXl,
 
@@ -82,10 +90,10 @@ class HomeScreen extends StatelessWidget {
 
               AppSpacing.vGapXl,
 
-              // Dernières réservations
+              // Historique des réservations
               const Padding(
                 padding: AppSpacing.screenPaddingHorizontalOnly,
-                child: HomeReservationsList(),
+                child: HomeReservationsHistory(),
               ),
 
               AppSpacing.vGapXxl,

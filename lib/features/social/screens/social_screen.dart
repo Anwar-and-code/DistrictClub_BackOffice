@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/router/page_transitions.dart';
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key});
@@ -64,13 +65,9 @@ class _SocialScreenState extends State<SocialScreen> {
                 return _ChatRoomCard(
                   chatRoom: _chatRooms[index],
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => _ChatRoomScreen(
-                          chatRoom: _chatRooms[index],
-                        ),
-                      ),
+                    context.navigateSlide(
+                      _ChatRoomScreen(chatRoom: _chatRooms[index]),
+                      routeName: '/social/chat/${_chatRooms[index].id}',
                     );
                   },
                 );

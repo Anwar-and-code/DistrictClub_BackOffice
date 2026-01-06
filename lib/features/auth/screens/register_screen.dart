@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/router/page_transitions.dart';
+import '../../../app/main_shell.dart';
 import '../../gamification/gamification.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -29,8 +31,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // The CelebrationOverlay handles all animations automatically
       GamificationServiceV2.instance.onAccountCreated();
       
-      // Navigate to main screen
-      Navigator.of(context).pushNamedAndRemoveUntil('/main', (route) => false);
+      // Navigate to main screen (phase transition for milestone)
+      Navigator.of(context).pushAndRemoveUntil(
+        AppPageRoute(
+          page: const MainShell(),
+          transitionType: PageTransitionType.phase,
+          settings: const RouteSettings(name: '/main'),
+        ),
+        (route) => false,
+      );
     }
   }
 

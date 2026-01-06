@@ -12,7 +12,7 @@ class HomeActionCards extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const AppSectionHeader(title: "Let's Padel"),
+        const AppSectionHeader(title: "À vos raquettes !"),
         const Gap(16),
         SizedBox(
           height: 280, // Fixed height for the bento grid
