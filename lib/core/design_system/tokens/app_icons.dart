@@ -131,6 +131,8 @@ abstract final class AppIcons {
   static const IconData trophyFilled = PhosphorIconsFill.trophy;
   static const IconData group = PhosphorIconsRegular.usersThree;
   static const IconData groupFilled = PhosphorIconsFill.usersThree;
+  static const IconData coaching = PhosphorIconsRegular.chalkboardTeacher;
+  static const IconData coachingFilled = PhosphorIconsFill.chalkboardTeacher;
   
   // --- Media ---
   static const IconData camera = PhosphorIconsRegular.camera;

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/design_system/design_system.dart';
 
@@ -8,19 +9,32 @@ class ReplaysScreen extends StatefulWidget {
   State<ReplaysScreen> createState() => _ReplaysScreenState();
 }
 
-class _ReplaysScreenState extends State<ReplaysScreen> {
-  String _selectedFilter = 'Tous';
+class _ReplaysScreenState extends State<ReplaysScreen> with SingleTickerProviderStateMixin {
+  int _selectedFilterIndex = 0;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final List<String> _filters = ['Tous', 'Ce mois', 'Favoris', 'Partagés'];
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: _filters.length, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() => _selectedFilterIndex = _tabController.index);
+      }
+    });
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
-  // Sample replays data - in real app, this would come from a service
+  // Sample replays data
   final List<Replay> _replays = [
     Replay(
       id: '1',
@@ -79,7 +93,6 @@ class _ReplaysScreenState extends State<ReplaysScreen> {
   List<Replay> get _filteredReplays {
     List<Replay> results = _replays;
     
-    // Apply search filter
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       results = results.where((r) =>
@@ -90,8 +103,7 @@ class _ReplaysScreenState extends State<ReplaysScreen> {
       ).toList();
     }
     
-    // Apply category filter
-    switch (_selectedFilter) {
+    switch (_filters[_selectedFilterIndex]) {
       case 'Favoris':
         return results.where((r) => r.isFavorite).toList();
       case 'Partagés':
@@ -109,157 +121,241 @@ class _ReplaysScreenState extends State<ReplaysScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundPrimary,
-      appBar: AppBar(
-        backgroundColor: AppColors.backgroundPrimary,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(AppIcons.arrowBack, color: AppColors.iconPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Mes Replays',
-          style: AppTypography.titleLarge,
-        ),
-        centerTitle: true,
-      ),
-      body: _replays.isEmpty ? _buildEmptyState() : _buildReplaysList(),
+      backgroundColor: const Color(0xFFFAF8F5),
+      body: _replays.isEmpty ? _buildEmptyState() : _buildContent(),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: AppSpacing.screenPadding,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceSubtle,
-                borderRadius: BorderRadius.circular(32),
-              ),
-              child: Icon(
-                Icons.videocam_off_outlined,
-                size: 56,
-                color: AppColors.iconTertiary,
-              ),
-            ),
-            AppSpacing.vGapXl,
-            Text(
-              'Aucun Replay',
-              style: AppTypography.headlineSmall.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            AppSpacing.vGapSm,
-            Text(
-              'Vos vidéos de matchs apparaîtront ici.\nJouez votre premier match filmé !',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            AppSpacing.vGapXl,
-            AppButton(
-              label: 'Réserver un terrain',
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReplaysList() {
+  Widget _buildContent() {
     final filteredReplays = _filteredReplays;
     
-    return Column(
-      children: [
-        // Search bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
-          child: _buildSearchBar(),
-        ),
-        
-        // Stats summary
-        _buildStatsSummary(),
-        
-        AppSpacing.vGapMd,
-        
-        // Filter chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          child: Row(
-            children: _filters.map((filter) => Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: FilterChip(
-                label: Text(filter),
-                selected: _selectedFilter == filter,
-                onSelected: (selected) {
-                  setState(() => _selectedFilter = filter);
-                },
-                selectedColor: AppColors.brandPrimary.withValues(alpha: 0.2),
-                checkmarkColor: AppColors.brandPrimary,
-                labelStyle: TextStyle(
-                  color: _selectedFilter == filter 
-                      ? AppColors.brandPrimary 
-                      : AppColors.textSecondary,
-                  fontWeight: _selectedFilter == filter 
-                      ? FontWeight.w600 
-                      : FontWeight.normal,
+    return CustomScrollView(
+      slivers: [
+        // Premium Header with Search
+        SliverToBoxAdapter(
+          child: Container(
+            color: const Color(0xFFFAF8F5),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row: Back button + Title
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(Icons.arrow_back_ios_new, 
+                          color: AppColors.textPrimary, 
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        'Mes Replays',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            )).toList(),
+                const SizedBox(height: 16),
+                // Search Bar (Always Visible)
+                _buildSearchBar(),
+              ],
+            ),
           ),
         ),
         
-        AppSpacing.vGapMd,
+        // Tab Filters
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _SliverTabBarDelegate(
+            TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              labelColor: AppColors.textPrimary,
+              unselectedLabelColor: AppColors.textTertiary,
+              labelStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.1,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.1,
+              ),
+              indicatorSize: TabBarIndicatorSize.label,
+              indicator: UnderlineTabIndicator(
+                borderSide: BorderSide(
+                  width: 2.5,
+                  color: AppColors.brandPrimary,
+                ),
+                borderRadius: BorderRadius.circular(2),
+              ),
+              dividerColor: Colors.transparent,
+              tabs: _filters.map((f) => Tab(text: f)).toList(),
+            ),
+            backgroundColor: const Color(0xFFFAF8F5),
+          ),
+        ),
         
-        // Replays list
-        Expanded(
-          child: filteredReplays.isEmpty
-              ? _buildNoResultsState()
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                  itemCount: filteredReplays.length,
-                  itemBuilder: (context, index) => _ReplayCard(
+        // Content
+        filteredReplays.isEmpty
+          ? SliverFillRemaining(child: _buildNoResultsState())
+          : SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _PremiumReplayCard(
                     replay: filteredReplays[index],
                     onTap: () => _showReplayDetails(filteredReplays[index]),
                     onFavorite: () => _toggleFavorite(filteredReplays[index]),
                     onShare: () => _shareReplay(filteredReplays[index]),
                     onMore: () => _showMoreOptions(filteredReplays[index]),
                   ),
+                  childCount: filteredReplays.length,
                 ),
-        ),
+              ),
+            ),
       ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            // Back button
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(Icons.arrow_back_ios_new, 
+                    color: AppColors.textPrimary, 
+                    size: 18,
+                  ),
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            const Spacer(),
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: AppColors.brown100,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Icon(
+                Icons.videocam_off_outlined,
+                size: 44,
+                color: AppColors.brandPrimary.withOpacity(0.6),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Aucun replay',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Vos vidéos de matchs apparaîtront ici\naprès votre première partie filmée.',
+              style: TextStyle(
+                fontSize: 15,
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: AppButton(
+                label: 'Réserver un terrain',
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            const Spacer(),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildSearchBar() {
     return Container(
+      height: 44,
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: AppRadius.borderRadiusMd,
-        border: Border.all(color: AppColors.borderDefault),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: TextField(
         controller: _searchController,
-        onChanged: (value) {
-          setState(() => _searchQuery = value);
-        },
+        onChanged: (value) => setState(() => _searchQuery = value),
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textPrimary,
+        ),
         decoration: InputDecoration(
-          hintText: 'Rechercher un replay...',
-          hintStyle: AppTypography.bodyMedium.copyWith(
+          hintText: 'Rechercher...',
+          hintStyle: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
             color: AppColors.textTertiary,
           ),
-          prefixIcon: Icon(Icons.search, color: AppColors.iconSecondary),
+          prefixIcon: Icon(Icons.search, color: AppColors.textTertiary, size: 20),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: Icon(Icons.clear, color: AppColors.iconSecondary),
+                  icon: Icon(Icons.close, color: AppColors.textTertiary, size: 18),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -267,64 +363,8 @@ class _ReplaysScreenState extends State<ReplaysScreen> {
                 )
               : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.md,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatsSummary() {
-    final totalDuration = _replays.fold<Duration>(
-      Duration.zero,
-      (sum, replay) => sum + replay.duration,
-    );
-    final totalViews = _replays.fold<int>(0, (sum, replay) => sum + replay.views);
-
-    return Container(
-      margin: AppSpacing.screenPaddingHorizontalOnly,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.brandPrimary.withValues(alpha: 0.1),
-            AppColors.brandSecondary.withValues(alpha: 0.1),
-          ],
-        ),
-        borderRadius: AppRadius.cardBorderRadius,
-        border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _StatItem(
-            icon: Icons.play_circle_outline,
-            value: '${_replays.length}',
-            label: 'Replays',
-          ),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColors.borderDefault,
-          ),
-          _StatItem(
-            icon: Icons.timer_outlined,
-            value: _formatTotalDuration(totalDuration),
-            label: 'Total',
-          ),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColors.borderDefault,
-          ),
-          _StatItem(
-            icon: Icons.visibility_outlined,
-            value: '$totalViews',
-            label: 'Vues',
-          ),
-        ],
       ),
     );
   }
@@ -332,56 +372,60 @@ class _ReplaysScreenState extends State<ReplaysScreen> {
   Widget _buildNoResultsState() {
     final isSearching = _searchQuery.isNotEmpty;
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            isSearching ? Icons.search_off : Icons.filter_list_off,
-            size: 48,
-            color: AppColors.iconTertiary,
-          ),
-          AppSpacing.vGapMd,
-          Text(
-            isSearching 
-                ? 'Aucun résultat pour "$_searchQuery"'
-                : 'Aucun replay trouvé',
-            style: AppTypography.titleMedium.copyWith(
-              color: AppColors.textSecondary,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.brown100,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(
+                isSearching ? Icons.search_off_rounded : Icons.filter_list_off_rounded,
+                size: 28,
+                color: AppColors.brandPrimary.withOpacity(0.6),
+              ),
             ),
-            textAlign: TextAlign.center,
-          ),
-          AppSpacing.vGapXs,
-          Text(
-            isSearching
-                ? 'Essayez avec d\'autres mots-clés'
-                : 'Essayez un autre filtre',
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textTertiary,
+            const SizedBox(height: 20),
+            Text(
+              isSearching ? 'Aucun résultat' : 'Aucun replay',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
             ),
-          ),
-          if (isSearching) ...[
-            AppSpacing.vGapLg,
-            TextButton.icon(
-              onPressed: () {
-                _searchController.clear();
-                setState(() => _searchQuery = '');
-              },
-              icon: Icon(Icons.clear, size: 18),
-              label: Text('Effacer la recherche'),
+            const SizedBox(height: 6),
+            Text(
+              isSearching
+                  ? 'Essayez d\'autres mots-clés'
+                  : 'Aucun replay dans cette catégorie',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
             ),
+            if (isSearching) ...[
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.brandPrimary,
+                ),
+                child: const Text('Effacer la recherche'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
-  }
-
-  String _formatTotalDuration(Duration duration) {
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    if (hours > 0) {
-      return '${hours}h${minutes.toString().padLeft(2, '0')}';
-    }
-    return '${minutes}min';
   }
 
   void _showReplayDetails(Replay replay) {
@@ -653,44 +697,35 @@ class Replay {
   });
 }
 
-// Widgets
-class _StatItem extends StatelessWidget {
-  const _StatItem({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
+// Premium Tab Bar Delegate
+class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverTabBarDelegate(this.tabBar, {required this.backgroundColor});
 
-  final IconData icon;
-  final String value;
-  final String label;
+  final TabBar tabBar;
+  final Color backgroundColor;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: AppColors.brandPrimary, size: 24),
-        AppSpacing.vGapXs,
-        Text(
-          value,
-          style: AppTypography.titleMedium.copyWith(
-            fontWeight: FontWeight.bold,
-            color: AppColors.brandPrimary,
-          ),
-        ),
-        Text(
-          label,
-          style: AppTypography.caption.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
+  double get minExtent => tabBar.preferredSize.height;
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: backgroundColor,
+      child: tabBar,
     );
+  }
+
+  @override
+  bool shouldRebuild(_SliverTabBarDelegate oldDelegate) {
+    return tabBar != oldDelegate.tabBar;
   }
 }
 
-class _ReplayCard extends StatelessWidget {
-  const _ReplayCard({
+// Premium Replay Card - Cinematic Design
+class _PremiumReplayCard extends StatelessWidget {
+  const _PremiumReplayCard({
     required this.replay,
     required this.onTap,
     required this.onFavorite,
@@ -707,307 +742,316 @@ class _ReplayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: AppRadius.cardBorderRadius,
-        border: Border.all(color: AppColors.borderDefault),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: AppRadius.cardBorderRadius,
+        borderRadius: BorderRadius.circular(20),
         child: InkWell(
           onTap: onTap,
-          borderRadius: AppRadius.cardBorderRadius,
+          borderRadius: BorderRadius.circular(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Thumbnail with play button overlay
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(AppRadius.card),
-                    ),
-                    child: Image.network(
-                      replay.thumbnailUrl,
-                      height: 160,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 160,
-                        color: AppColors.surfaceSubtle,
-                        child: Icon(
-                          Icons.videocam,
-                          size: 48,
-                          color: AppColors.iconTertiary,
+              // Cinematic Thumbnail (16:9 aspect ratio)
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Thumbnail Image
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(20),
+                      ),
+                      child: Image.network(
+                        replay.thumbnailUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: AppColors.neutral200,
+                          child: Icon(
+                            Icons.videocam_rounded,
+                            size: 48,
+                            color: AppColors.neutral400,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // Play button overlay
-                  Positioned.fill(
-                    child: Center(
+                    // Subtle gradient overlay
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(20),
+                      ),
                       child: Container(
-                        width: 56,
-                        height: 56,
                         decoration: BoxDecoration(
-                          color: AppColors.brandPrimary.withValues(alpha: 0.9),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.brandPrimary.withValues(alpha: 0.3),
-                              blurRadius: 12,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.play_arrow,
-                          color: AppColors.white,
-                          size: 32,
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.4),
+                            ],
+                            stops: const [0.5, 1.0],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // Duration badge
-                  Positioned(
-                    bottom: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: AppRadius.borderRadiusSm,
-                      ),
-                      child: Text(
-                        _formatDuration(replay.duration),
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Favorite badge
-                  if (replay.isFavorite)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: AppColors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.favorite,
-                          color: AppColors.error,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                  // Shared badge
-                  if (replay.isShared)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          borderRadius: AppRadius.borderRadiusSm,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.share, color: AppColors.white, size: 12),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Partagé',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.white,
-                                fontWeight: FontWeight.w500,
+                    // Premium Play Button (centered, frosted glass effect)
+                    Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.25),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.4),
+                                width: 1.5,
                               ),
                             ),
-                          ],
+                            child: const Icon(
+                              Icons.play_arrow_rounded,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                ],
-              ),
-              
-              // Content
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title and more button
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            replay.title,
-                            style: AppTypography.titleMedium.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    // Duration Badge (bottom right, refined)
+                    Positioned(
+                      bottom: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _formatDuration(replay.duration),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.3,
                           ),
                         ),
-                        IconButton(
-                          icon: Icon(Icons.more_vert, color: AppColors.iconSecondary),
-                          onPressed: onMore,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
+                      ),
                     ),
-                    
-                    AppSpacing.vGapXs,
-                    
-                    // Date and court
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_today,
-                          size: 14,
-                          color: AppColors.iconTertiary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDate(replay.date),
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
+                    // Favorite indicator (top left, subtle)
+                    if (replay.isFavorite)
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.favorite_rounded,
+                            color: AppColors.error,
+                            size: 16,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Icon(
-                          Icons.location_on_outlined,
-                          size: 14,
-                          color: AppColors.iconTertiary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          replay.court,
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    AppSpacing.vGapSm,
-                    
-                    // Players
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.people_outline,
-                          size: 14,
-                          color: AppColors.iconTertiary,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            replay.players.join(' • '),
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    
-                    AppSpacing.vGapMd,
-                    
-                    // Score and actions
-                    Row(
-                      children: [
-                        // Score badge
-                        Container(
+                      ),
+                    // Shared badge (top right, elegant)
+                    if (replay.isShared)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
-                            vertical: 4,
+                            vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                            borderRadius: AppRadius.borderRadiusSm,
+                            color: AppColors.brandPrimary,
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                Icons.emoji_events,
-                                size: 14,
-                                color: AppColors.brandPrimary,
+                              const Icon(
+                                Icons.link_rounded,
+                                color: Colors.white,
+                                size: 12,
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                replay.score,
-                                style: AppTypography.labelSmall.copyWith(
-                                  color: AppColors.brandPrimary,
+                                'Partagé',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
                                 ),
                               ),
                             ],
                           ),
                         ),
+                      ),
+                  ],
+                ),
+              ),
+              
+              // Content Section (Clean & Minimal)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title Row with Actions
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                replay.title,
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: -0.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 6),
+                              // Meta info (date, court, score) - single line
+                              Text(
+                                '${_formatDate(replay.date)} · ${replay.court} · ${replay.score}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textSecondary,
+                                  letterSpacing: 0.1,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        // More options button
+                        GestureDetector(
+                          onTap: onMore,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            child: Icon(
+                              Icons.more_horiz_rounded,
+                              color: AppColors.textTertiary,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 14),
+                    
+                    // Bottom Row: Players + Actions
+                    Row(
+                      children: [
+                        // Players avatars stack
+                        SizedBox(
+                          width: 68,
+                          height: 28,
+                          child: Stack(
+                            children: [
+                              for (int i = 0; i < replay.players.length.clamp(0, 4); i++)
+                                Positioned(
+                                  left: i * 14.0,
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: _getAvatarColor(i),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        replay.players[i][0].toUpperCase(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                         
-                        // Views
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
+                        
+                        // Views count
                         Icon(
                           Icons.visibility_outlined,
                           size: 14,
-                          color: AppColors.iconTertiary,
+                          color: AppColors.textTertiary,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '${replay.views}',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textTertiary,
                           ),
                         ),
                         
                         const Spacer(),
                         
-                        // Action buttons
-                        IconButton(
-                          icon: Icon(
-                            replay.isFavorite ? Icons.favorite : Icons.favorite_border,
-                            color: replay.isFavorite ? AppColors.error : AppColors.iconSecondary,
-                            size: 20,
-                          ),
-                          onPressed: onFavorite,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
+                        // Action buttons (refined)
+                        _ActionButton(
+                          icon: replay.isFavorite 
+                              ? Icons.favorite_rounded 
+                              : Icons.favorite_outline_rounded,
+                          color: replay.isFavorite 
+                              ? AppColors.error 
+                              : AppColors.textTertiary,
+                          onTap: onFavorite,
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: Icon(
-                            Icons.share_outlined,
-                            color: AppColors.iconSecondary,
-                            size: 20,
-                          ),
-                          onPressed: onShare,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
+                        const SizedBox(width: 4),
+                        _ActionButton(
+                          icon: Icons.ios_share_rounded,
+                          color: AppColors.textTertiary,
+                          onTap: onShare,
                         ),
                       ],
                     ),
@@ -1019,6 +1063,16 @@ class _ReplayCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _getAvatarColor(int index) {
+    final colors = [
+      AppColors.brandPrimary,
+      AppColors.brandSecondary,
+      AppColors.brown600,
+      AppColors.gold600,
+    ];
+    return colors[index % colors.length];
   }
 
   String _formatDuration(Duration duration) {
@@ -1035,7 +1089,39 @@ class _ReplayCard extends StatelessWidget {
       'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
       'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'
     ];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
+    return '${date.day} ${months[date.month - 1]}';
+  }
+}
+
+// Refined Action Button
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: color,
+        ),
+      ),
+    );
   }
 }
 

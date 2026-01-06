@@ -3,6 +3,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
+import '../../../core/design_system/design_system.dart';
 import '../models/achievement.dart';
 import '../models/gamification_event.dart';
 import '../services/gamification_service_v2.dart';
@@ -27,7 +28,6 @@ class _CelebrationOverlayState extends State<CelebrationOverlay> {
   void initState() {
     super.initState();
     _confettiController = ConfettiController(duration: const Duration(seconds: 3));
-    
     _eventSubscription = GamificationServiceV2.instance.events.listen(_handleEvent);
   }
 
@@ -43,7 +43,6 @@ class _CelebrationOverlayState extends State<CelebrationOverlay> {
         _showAchievementCelebration(event);
         break;
       case GamificationEventType.streakUpdated:
-        // Could show streak animation
         break;
     }
   }
@@ -113,7 +112,7 @@ class _CelebrationOverlayState extends State<CelebrationOverlay> {
       children: [
         widget.child,
         
-        // Confetti from top center
+        // Confetti from top center - using app brand colors
         Align(
           alignment: Alignment.topCenter,
           child: ConfettiWidget(
@@ -121,12 +120,12 @@ class _CelebrationOverlayState extends State<CelebrationOverlay> {
             blastDirectionality: BlastDirectionality.explosive,
             shouldLoop: false,
             colors: const [
-              Color(0xFF6C63FF),
-              Color(0xFFFF6B6B),
-              Color(0xFFFFD93D),
-              Color(0xFF4ECDC4),
-              Color(0xFFFF8C00),
-              Color(0xFF9B59B6),
+              AppColors.brandPrimary,
+              AppColors.brandSecondary,
+              AppColors.brandOlive,
+              AppColors.gold400,
+              AppColors.brown300,
+              AppColors.gold200,
             ],
             numberOfParticles: 50,
             gravity: 0.1,
@@ -138,7 +137,15 @@ class _CelebrationOverlayState extends State<CelebrationOverlay> {
         
         // Celebration overlay
         if (_showOverlay && _currentEvent != null)
-          _buildCelebrationCard(),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _showOverlay = false;
+                _currentEvent = null;
+              });
+            },
+            child: _buildCelebrationCard(),
+          ),
       ],
     );
   }
@@ -169,18 +176,13 @@ class _XpToastContent extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF6C63FF).withOpacity(0.95),
-            const Color(0xFF9B59B6).withOpacity(0.95),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(50),
+        gradient: AppColors.primaryGradient,
+        borderRadius: AppRadius.borderRadiusFull,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6C63FF).withOpacity(0.4),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: AppColors.brandPrimary.withValues(alpha: 0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -191,13 +193,13 @@ class _XpToastContent extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: AppColors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.star_rounded,
-              color: Colors.white,
-              size: 24,
+              color: AppColors.white,
+              size: 22,
             ),
           ),
           const SizedBox(width: 12),
@@ -207,18 +209,16 @@ class _XpToastContent extends StatelessWidget {
             children: [
               Text(
                 '+$xpAmount XP',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
+                style: AppTypography.titleMedium.copyWith(
+                  color: AppColors.white,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               if (message != null)
                 Text(
                   message!,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 12,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.white.withValues(alpha: 0.8),
                   ),
                 ),
             ],
@@ -228,7 +228,7 @@ class _XpToastContent extends StatelessWidget {
     ).animate()
       .fadeIn(duration: 300.ms)
       .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 300.ms, curve: Curves.elasticOut)
-      .shimmer(delay: 500.ms, duration: 1000.ms, color: Colors.white.withOpacity(0.3));
+      .shimmer(delay: 500.ms, duration: 1000.ms, color: AppColors.white.withValues(alpha: 0.3));
   }
 }
 
@@ -240,81 +240,85 @@ class _LevelUpCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black54,
+      color: AppColors.black.withValues(alpha: 0.6),
       child: Center(
         child: Container(
-          margin: const EdgeInsets.all(32),
-          padding: const EdgeInsets.all(32),
+          margin: const EdgeInsets.all(AppSpacing.xl),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF1a1a2e),
-                Color(0xFF16213e),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(32),
+            color: AppColors.backgroundPrimary,
+            borderRadius: AppRadius.borderRadiusXxl,
             border: Border.all(
-              color: const Color(0xFFFFD700),
-              width: 3,
+              color: AppColors.brandSecondary,
+              width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFFD700).withOpacity(0.3),
-                blurRadius: 30,
-                spreadRadius: 5,
+                color: AppColors.brandSecondary.withValues(alpha: 0.3),
+                blurRadius: 24,
+                spreadRadius: 4,
               ),
+              ...AppShadows.shadowXl,
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Lottie Trophy Animation
-              SizedBox(
-                height: 150,
-                width: 150,
+              // Trophy Animation
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  gradient: AppColors.goldGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.brandSecondary.withValues(alpha: 0.4),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
                 child: Lottie.network(
                   'https://assets2.lottiefiles.com/packages/lf20_touohxv0.json',
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) => const Icon(
                     Icons.emoji_events_rounded,
-                    size: 100,
-                    color: Color(0xFFFFD700),
+                    size: 60,
+                    color: AppColors.white,
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+              ).animate()
+                .scale(begin: const Offset(0, 0), duration: 600.ms, curve: Curves.elasticOut),
+              
+              AppSpacing.vGapLg,
               
               // Level Up Text
-              const Text(
+              Text(
                 'NIVEAU SUPÉRIEUR !',
-                style: TextStyle(
-                  color: Color(0xFFFFD700),
-                  fontSize: 24,
+                style: AppTypography.titleLarge.copyWith(
+                  color: AppColors.brandSecondary,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
+                  letterSpacing: 1.5,
                 ),
-              ).animate()
-                .fadeIn(delay: 300.ms)
+              ).animate(delay: 300.ms)
+                .fadeIn()
                 .scale(begin: const Offset(0.5, 0.5), curve: Curves.elasticOut),
               
-              const SizedBox(height: 16),
+              AppSpacing.vGapMd,
               
               // Level Number
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: AppRadius.borderRadiusLg,
+                  boxShadow: AppShadows.buttonShadow,
                 ),
                 child: Text(
                   'NIVEAU $level',
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 32,
+                  style: AppTypography.headlineMedium.copyWith(
+                    color: AppColors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -322,24 +326,21 @@ class _LevelUpCard extends StatelessWidget {
                 .fadeIn()
                 .scale(begin: const Offset(0, 0), curve: Curves.elasticOut),
               
-              const SizedBox(height: 24),
+              AppSpacing.vGapLg,
               
               Text(
                 'Continuez comme ça ! 🎉',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 16,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
                 ),
               ).animate(delay: 800.ms).fadeIn(),
               
-              const SizedBox(height: 24),
+              AppSpacing.vGapLg,
               
-              // Tap to dismiss
               Text(
                 'Touchez pour continuer',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 12,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textTertiary,
                 ),
               ).animate(delay: 1000.ms, onPlay: (c) => c.repeat(reverse: true))
                 .fadeIn()
@@ -349,7 +350,7 @@ class _LevelUpCard extends StatelessWidget {
           ),
         ).animate()
           .fadeIn(duration: 400.ms)
-          .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack),
+          .scale(begin: const Offset(0.9, 0.9), curve: Curves.easeOutBack),
       ),
     );
   }
@@ -363,31 +364,25 @@ class _AchievementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black54,
+      color: AppColors.black.withValues(alpha: 0.6),
       child: Center(
         child: Container(
-          margin: const EdgeInsets.all(32),
-          padding: const EdgeInsets.all(32),
+          margin: const EdgeInsets.all(AppSpacing.xl),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFF1a1a2e),
-                achievement.color.withOpacity(0.3),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(32),
+            color: AppColors.backgroundPrimary,
+            borderRadius: AppRadius.borderRadiusXxl,
             border: Border.all(
-              color: achievement.color,
-              width: 3,
+              color: AppColors.brandPrimary,
+              width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: achievement.color.withOpacity(0.3),
-                blurRadius: 30,
-                spreadRadius: 5,
+                color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                blurRadius: 24,
+                spreadRadius: 4,
               ),
+              ...AppShadows.shadowXl,
             ],
           ),
           child: Column(
@@ -395,129 +390,107 @@ class _AchievementCard extends StatelessWidget {
             children: [
               // Achievement Badge
               Container(
-                width: 120,
-                height: 120,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      achievement.color,
-                      achievement.color.withOpacity(0.6),
-                    ],
-                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: achievement.color.withOpacity(0.5),
-                      blurRadius: 20,
-                      spreadRadius: 5,
+                      color: AppColors.brandPrimary.withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      spreadRadius: 2,
                     ),
                   ],
                 ),
-                child: achievement.lottieUrl != null
-                    ? ClipOval(
-                        child: Lottie.network(
-                          achievement.lottieUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            achievement.icon,
-                            size: 60,
-                            color: Colors.white,
-                          ),
-                        ),
-                      )
-                    : Icon(
-                        achievement.icon,
-                        size: 60,
-                        color: Colors.white,
-                      ),
+                child: Icon(
+                  achievement.icon,
+                  size: 48,
+                  color: AppColors.white,
+                ),
               ).animate()
                 .scale(begin: const Offset(0, 0), duration: 600.ms, curve: Curves.elasticOut)
                 .then()
-                .shimmer(duration: 1500.ms, color: Colors.white.withOpacity(0.3)),
+                .shimmer(duration: 1500.ms, color: AppColors.white.withValues(alpha: 0.3)),
               
-              const SizedBox(height: 24),
+              AppSpacing.vGapLg,
               
-              // Unlocked Text
+              // Unlocked Badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: achievement.color.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: achievement.color.withOpacity(0.5)),
+                  color: AppColors.brandOlive.withValues(alpha: 0.1),
+                  borderRadius: AppRadius.borderRadiusFull,
+                  border: Border.all(color: AppColors.brandOlive.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       Icons.lock_open_rounded,
-                      color: achievement.color,
-                      size: 18,
+                      color: AppColors.brandOlive,
+                      size: 16,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Text(
                       'SUCCÈS DÉBLOQUÉ',
-                      style: TextStyle(
-                        color: achievement.color,
-                        fontSize: 12,
+                      style: AppTypography.overline.copyWith(
+                        color: AppColors.brandOlive,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
                       ),
                     ),
                   ],
                 ),
               ).animate(delay: 300.ms).fadeIn().slideY(begin: -0.5),
               
-              const SizedBox(height: 16),
+              AppSpacing.vGapMd,
               
               // Achievement Title
               Text(
                 achievement.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
+                style: AppTypography.headlineSmall.copyWith(
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.bold,
                 ),
                 textAlign: TextAlign.center,
               ).animate(delay: 500.ms).fadeIn().scale(),
               
-              const SizedBox(height: 8),
+              AppSpacing.vGapXs,
               
               // Achievement Description
               Text(
                 achievement.description,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 14,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
                 ),
                 textAlign: TextAlign.center,
               ).animate(delay: 600.ms).fadeIn(),
               
-              const SizedBox(height: 20),
+              AppSpacing.vGapLg,
               
               // XP Reward
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF6C63FF),
-                      achievement.color,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(25),
+                  gradient: AppColors.goldGradient,
+                  borderRadius: AppRadius.borderRadiusFull,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.brandSecondary.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.star_rounded, color: Colors.white, size: 24),
+                    const Icon(Icons.star_rounded, color: AppColors.white, size: 22),
                     const SizedBox(width: 8),
                     Text(
                       '+${achievement.xpReward} XP',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
+                      style: AppTypography.titleMedium.copyWith(
+                        color: AppColors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -527,14 +500,12 @@ class _AchievementCard extends StatelessWidget {
                 .fadeIn()
                 .scale(begin: const Offset(0.5, 0.5), curve: Curves.elasticOut),
               
-              const SizedBox(height: 24),
+              AppSpacing.vGapLg,
               
-              // Tap to dismiss
               Text(
                 'Touchez pour continuer',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 12,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textTertiary,
                 ),
               ).animate(delay: 1200.ms, onPlay: (c) => c.repeat(reverse: true))
                 .fadeIn()
@@ -544,7 +515,7 @@ class _AchievementCard extends StatelessWidget {
           ),
         ).animate()
           .fadeIn(duration: 400.ms)
-          .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack),
+          .scale(begin: const Offset(0.9, 0.9), curve: Curves.easeOutBack),
       ),
     );
   }

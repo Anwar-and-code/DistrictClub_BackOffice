@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../../core/design_system/design_system.dart';
 import '../services/gamification_service_v2.dart';
 
 class XpProgressBar extends StatelessWidget {
@@ -32,41 +33,39 @@ class XpProgressBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.3)),
+        color: AppColors.surfaceDefault,
+        borderRadius: AppRadius.borderRadiusFull,
+        border: Border.all(color: AppColors.borderDefault),
+        boxShadow: AppShadows.shadowSm,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Level Badge
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6C63FF), Color(0xFF9B59B6)],
-              ),
-              borderRadius: BorderRadius.circular(12),
+              gradient: AppColors.primaryGradient,
+              borderRadius: AppRadius.borderRadiusFull,
             ),
             child: Text(
               'Nv.${service.level}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           // Mini progress bar
           SizedBox(
-            width: 60,
+            width: 50,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: AppRadius.borderRadiusFull,
               child: LinearProgressIndicator(
                 value: service.currentLevelProgress,
-                backgroundColor: Colors.white.withOpacity(0.2),
-                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6C63FF)),
+                backgroundColor: AppColors.neutral200,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.brandSecondary),
                 minHeight: 6,
               ),
             ),
@@ -74,9 +73,9 @@ class XpProgressBar extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             '${service.xp} XP',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 11,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -86,28 +85,12 @@ class XpProgressBar extends StatelessWidget {
 
   Widget _buildFull(GamificationServiceV2 service) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF1a1a2e),
-            const Color(0xFF16213e).withOpacity(0.9),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFF6C63FF).withOpacity(0.3),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6C63FF).withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: AppColors.surfaceDefault,
+        borderRadius: AppRadius.cardBorderRadius,
+        border: Border.all(color: AppColors.borderDefault),
+        boxShadow: AppShadows.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,29 +103,24 @@ class XpProgressBar extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 50,
-                    height: 50,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF6C63FF), Color(0xFF9B59B6)],
-                      ),
+                      gradient: AppColors.primaryGradient,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6C63FF).withOpacity(0.4),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                          color: AppColors.brandPrimary.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
                     child: Center(
                       child: Text(
                         '${service.level}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
+                        style: AppTypography.titleLarge.copyWith(
+                          color: AppColors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -154,17 +132,16 @@ class XpProgressBar extends StatelessWidget {
                     children: [
                       Text(
                         'Niveau ${service.level}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
+                        style: AppTypography.titleMedium.copyWith(
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
                         _getLevelTitle(service.level),
-                        style: TextStyle(
-                          color: const Color(0xFF6C63FF).withOpacity(0.8),
-                          fontSize: 13,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.brandSecondary,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -177,17 +154,16 @@ class XpProgressBar extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.star_rounded,
-                        color: Color(0xFFFFD93D),
+                        color: AppColors.brandSecondary,
                         size: 20,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '${service.xp}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
+                        style: AppTypography.titleMedium.copyWith(
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -195,9 +171,8 @@ class XpProgressBar extends StatelessWidget {
                   ),
                   Text(
                     'XP Total',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 11,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textTertiary,
                     ),
                   ),
                 ],
@@ -205,7 +180,7 @@ class XpProgressBar extends StatelessWidget {
             ],
           ),
           
-          const SizedBox(height: 20),
+          AppSpacing.vGapLg,
           
           // Progress Bar
           Column(
@@ -216,16 +191,14 @@ class XpProgressBar extends StatelessWidget {
                 children: [
                   Text(
                     'Progression',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 12,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.textSecondary,
                     ),
                   ),
                   Text(
                     '${service.xpToNextLevel} XP restants',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 11,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textTertiary,
                     ),
                   ),
                 ],
@@ -235,33 +208,31 @@ class XpProgressBar extends StatelessWidget {
                 children: [
                   // Background
                   Container(
-                    height: 12,
+                    height: 10,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
+                      color: AppColors.neutral200,
+                      borderRadius: AppRadius.borderRadiusFull,
                     ),
                   ),
                   // Progress
                   FractionallySizedBox(
                     widthFactor: service.currentLevelProgress.clamp(0.0, 1.0),
                     child: Container(
-                      height: 12,
+                      height: 10,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6C63FF), Color(0xFF9B59B6), Color(0xFFFF6B6B)],
-                        ),
-                        borderRadius: BorderRadius.circular(6),
+                        gradient: AppColors.goldGradient,
+                        borderRadius: AppRadius.borderRadiusFull,
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF6C63FF).withOpacity(0.5),
-                            blurRadius: 8,
+                            color: AppColors.brandSecondary.withValues(alpha: 0.4),
+                            blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
                         ],
                       ),
                     ),
                   ).animate(onPlay: (c) => c.repeat())
-                    .shimmer(duration: 2000.ms, color: Colors.white.withOpacity(0.2)),
+                    .shimmer(duration: 2000.ms, color: AppColors.white.withValues(alpha: 0.3)),
                 ],
               ),
             ],
@@ -269,28 +240,27 @@ class XpProgressBar extends StatelessWidget {
           
           // Streak indicator if active
           if (service.currentStreak > 0) ...[
-            const SizedBox(height: 16),
+            AppSpacing.vGapMd,
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFFF8C00).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFF8C00).withOpacity(0.3)),
+                color: AppColors.brandSecondary.withValues(alpha: 0.1),
+                borderRadius: AppRadius.borderRadiusSm,
+                border: Border.all(color: AppColors.brandSecondary.withValues(alpha: 0.2)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.local_fire_department_rounded,
-                    color: Color(0xFFFF8C00),
+                    color: AppColors.brandSecondary,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
                   Text(
                     '${service.currentStreak} jours de suite !',
-                    style: const TextStyle(
-                      color: Color(0xFFFF8C00),
-                      fontSize: 13,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.brandSecondary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

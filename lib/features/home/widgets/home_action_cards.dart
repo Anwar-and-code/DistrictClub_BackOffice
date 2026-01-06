@@ -67,11 +67,11 @@ class HomeActionCards extends StatelessWidget {
                     // BOTTOM RIGHT CARD (New)
                     Expanded(
                       child: _BentoCard(
-                        title: 'Tournois',
-                        icon: AppIcons.trophy,
-                        imageUrl: 'https://images.unsplash.com/photo-1551773188-0801da12ddae?w=400&q=80',
+                        title: 'Coaching',
+                        icon: AppIcons.coaching,
+                        imageUrl: 'https://images.unsplash.com/photo-1594381898411-846e7d193883?w=400&q=80',
                         color: AppColors.brandPrimary,
-                        onTap: () => Navigator.pushNamed(context, AppRouter.tournaments),
+                        onTap: () => Navigator.pushNamed(context, AppRouter.coaching),
                       ),
                     ),
                   ],

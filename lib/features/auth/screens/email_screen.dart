@@ -232,7 +232,7 @@ class _EmailScreenState extends State<EmailScreen> {
                 child: OutlinedButton(
                   onPressed: _signInWithGoogle,
                   style: OutlinedButton.styleFrom(
-                    backgroundColor: AppColors.white,
+                    backgroundColor: const Color(0xFFFFFFFF),
                     side: BorderSide(color: AppColors.inputBorder),
                     shape: RoundedRectangleBorder(
                       borderRadius: AppRadius.inputBorderRadius,
@@ -241,8 +241,8 @@ class _EmailScreenState extends State<EmailScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.network(
-                        'https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg',
+                      Image.asset(
+                        'assets/images/google_icon.png',
                         width: 20,
                         height: 20,
                         errorBuilder: (_, __, ___) => const Icon(
@@ -272,7 +272,7 @@ class _EmailScreenState extends State<EmailScreen> {
                 child: OutlinedButton(
                   onPressed: _signInWithMicrosoft,
                   style: OutlinedButton.styleFrom(
-                    backgroundColor: AppColors.white,
+                    backgroundColor: const Color(0xFFFFFFFF),
                     side: BorderSide(color: AppColors.inputBorder),
                     shape: RoundedRectangleBorder(
                       borderRadius: AppRadius.inputBorderRadius,
@@ -281,8 +281,8 @@ class _EmailScreenState extends State<EmailScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.network(
-                        'https://learn.microsoft.com/en-us/entra/identity-platform/media/howto-add-branding-in-apps/ms-symbollockup_mssymbol_19.png',
+                      Image.asset(
+                        'assets/images/microsoft_icon.png',
                         width: 20,
                         height: 20,
                         errorBuilder: (_, __, ___) => const Icon(
