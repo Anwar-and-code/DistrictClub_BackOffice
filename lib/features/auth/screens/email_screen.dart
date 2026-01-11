@@ -21,7 +21,12 @@ class _EmailScreenState extends State<EmailScreen> {
   }
 
   bool get _isFormValid {
-    return _emailController.text.contains('@');
+    final email = _emailController.text.trim();
+    // Regex pour valider un format email correct
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
+    return emailRegex.hasMatch(email);
   }
 
   void _onSubmit() async {

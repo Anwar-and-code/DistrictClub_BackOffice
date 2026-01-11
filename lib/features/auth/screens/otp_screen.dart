@@ -118,6 +118,21 @@ class _OtpScreenState extends State<OtpScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            // Back button
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: AppSpacing.xs, top: AppSpacing.xs),
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: AppColors.textPrimary,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
             // Top section with logo, title, and OTP boxes
             Expanded(
               flex: 3,
@@ -125,8 +140,6 @@ class _OtpScreenState extends State<OtpScreen> {
                 padding: AppSpacing.screenPadding,
                 child: Column(
                   children: [
-                    AppSpacing.vGapLg,
-                    
                     // Logo
                     const AppLogo(
                       size: AppLogoSize.large,

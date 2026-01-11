@@ -51,129 +51,145 @@ class _OnboardingNameScreenState extends State<OnboardingNameScreen> {
   Widget build(BuildContext context) {
     final isFormValid = _prenomController.text.isNotEmpty && 
                         _nomController.text.isNotEmpty;
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundPrimary,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(AppIcons.arrowBack),
-          onPressed: () => Navigator.of(context).pop(),
-          color: AppColors.iconPrimary,
-        ),
-      ),
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
-        child: Padding(
-          padding: AppSpacing.screenPadding,
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        // Logo
-                        const AppLogo(
-                          size: AppLogoSize.medium,
-                        ),
-                        
-                        AppSpacing.vGapXxl,
-                        
-                        // Icon
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceSubtle,
-                            borderRadius: AppRadius.borderRadiusLg,
-                          ),
-                          child: Icon(
-                            Icons.person_outline,
-                            size: 40,
-                            color: AppColors.brandPrimary,
-                          ),
-                        ),
-                        
-                        AppSpacing.vGapXl,
-                        
-                        // Title
-                        Text(
-                          'Vos informations',
-                          style: AppTypography.titleLarge,
-                          textAlign: TextAlign.center,
-                        ),
-                        
-                        AppSpacing.vGapXs,
-                        
-                        // Subtitle
-                        Text(
-                          'Commençons par votre nom',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        
-                        AppSpacing.vGapXxl,
-                        
-                        // Prénom field
-                        AppTextField(
-                          controller: _prenomController,
-                          label: 'Prénom',
-                          hint: 'Entrez votre prénom',
-                          prefixIcon: Icons.person_outline,
-                          textCapitalization: TextCapitalization.words,
-                          validator: _validateName,
-                          onChanged: (value) => setState(() {}),
-                        ),
-                        
-                        AppSpacing.vGapMd,
-                        
-                        // Nom field
-                        AppTextField(
-                          controller: _nomController,
-                          label: 'Nom',
-                          hint: 'Entrez votre nom',
-                          prefixIcon: Icons.person_outline,
-                          textCapitalization: TextCapitalization.words,
-                          validator: _validateName,
-                          onChanged: (value) => setState(() {}),
-                        ),
-                        
-                        AppSpacing.vGapXl,
-                        
-                        // Progress indicator
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildProgressDot(true),
-                            AppSpacing.hGapXs,
-                            _buildProgressDot(false),
-                            AppSpacing.hGapXs,
-                            _buildProgressDot(false),
-                          ],
-                        ),
-                      ],
+        child: Column(
+          children: [
+            // Header fixe avec back button et logo
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(AppIcons.arrowBack),
+                    onPressed: () => Navigator.of(context).pop(),
+                    color: AppColors.iconPrimary,
+                  ),
+                  const Expanded(
+                    child: Center(
+                      child: AppLogo(size: AppLogoSize.small),
                     ),
                   ),
-                ),
-                
-                // Continue button
-                AppButton(
-                  label: 'Suivant',
-                  onPressed: isFormValid ? _onContinue : null,
-                  variant: AppButtonVariant.primary,
-                  size: AppButtonSize.large,
-                  isFullWidth: true,
-                  isDisabled: !isFormValid,
-                ),
-                
-                AppSpacing.vGapLg,
-              ],
+                  const SizedBox(width: 48), // Balance pour centrer le logo
+                ],
+              ),
             ),
-          ),
+            
+            // Contenu scrollable
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  bottom: bottomPadding > 0 ? bottomPadding + 80 : AppSpacing.lg,
+                ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      AppSpacing.vGapLg,
+                      
+                      // Title
+                      Text(
+                        'Vos informations',
+                        style: AppTypography.headlineMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                      
+                      AppSpacing.vGapXs,
+                      
+                      // Subtitle
+                      Text(
+                        'Commençons par votre nom',
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      
+                      AppSpacing.vGapXxl,
+                      
+                      // Nom field
+                      AppTextField(
+                        controller: _nomController,
+                        label: 'Nom',
+                        hint: 'Entrez votre nom',
+                        prefixIcon: Icons.person_outline,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        validator: _validateName,
+                        onChanged: (value) => setState(() {}),
+                      ),
+                      
+                      AppSpacing.vGapMd,
+                      
+                      // Prénom field
+                      AppTextField(
+                        controller: _prenomController,
+                        label: 'Prénom',
+                        hint: 'Entrez votre prénom',
+                        prefixIcon: Icons.person_outline,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.done,
+                        validator: _validateName,
+                        onChanged: (value) => setState(() {}),
+                        onSubmitted: (_) {
+                          if (isFormValid) _onContinue();
+                        },
+                      ),
+                      
+                      AppSpacing.vGapXxl,
+                      
+                      // Progress indicator
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildProgressDot(true),
+                          AppSpacing.hGapXs,
+                          _buildProgressDot(false),
+                          AppSpacing.hGapXs,
+                          _buildProgressDot(false),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            
+            // Bouton fixe en bas
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: EdgeInsets.only(
+                left: AppSpacing.lg,
+                right: AppSpacing.lg,
+                bottom: bottomPadding > 0 ? AppSpacing.sm : AppSpacing.lg,
+                top: AppSpacing.md,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundPrimary,
+                boxShadow: bottomPadding > 0 ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ] : null,
+              ),
+              child: AppButton(
+                label: 'Suivant',
+                onPressed: isFormValid ? _onContinue : null,
+                variant: AppButtonVariant.primary,
+                size: AppButtonSize.large,
+                isFullWidth: true,
+                isDisabled: !isFormValid,
+              ),
+            ),
+          ],
         ),
       ),
     );
