@@ -5,7 +5,7 @@ La solution est conçue pour être **intuitive pour les joueurs**, **efficace po
 
 ---
 
-## 🎯 Objectifs du projet
+## 🎯 Objectifs du projets
 
 - Digitaliser la réservation des terrains  
 - Éviter les doubles réservations  
