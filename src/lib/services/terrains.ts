@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/client'
 import type { Terrain } from '@/types/database'
 
-const supabase = createClient()
-
 export async function getTerrains() {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('terrains')
     .select('*')
@@ -13,7 +12,8 @@ export async function getTerrains() {
   return data as Terrain[]
 }
 
-export async function getTerrainById(id: string) {
+export async function getTerrainById(id: number) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('terrains')
     .select('*')
@@ -24,7 +24,8 @@ export async function getTerrainById(id: string) {
   return data as Terrain
 }
 
-export async function updateTerrain(id: string, updates: Partial<Terrain>) {
+export async function updateTerrain(id: number, updates: Partial<Terrain>) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('terrains')
     .update(updates)
@@ -36,7 +37,8 @@ export async function updateTerrain(id: string, updates: Partial<Terrain>) {
   return data as Terrain
 }
 
-export async function createTerrain(terrain: { code: string; name: string; is_active?: boolean }) {
+export async function createTerrain(terrain: { code: string; is_active?: boolean }) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('terrains')
     .insert({
@@ -50,7 +52,8 @@ export async function createTerrain(terrain: { code: string; name: string; is_ac
   return data as Terrain
 }
 
-export async function deleteTerrain(id: string) {
+export async function deleteTerrain(id: number) {
+  const supabase = createClient()
   const { error } = await supabase
     .from('terrains')
     .delete()

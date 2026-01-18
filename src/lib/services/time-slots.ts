@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/client'
 import type { TimeSlot } from '@/types/database'
 
-const supabase = createClient()
-
 export async function getTimeSlots() {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('time_slots')
     .select('*')
@@ -13,7 +12,8 @@ export async function getTimeSlots() {
   return data as TimeSlot[]
 }
 
-export async function getTimeSlotById(id: string) {
+export async function getTimeSlotById(id: number) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('time_slots')
     .select('*')
@@ -24,7 +24,8 @@ export async function getTimeSlotById(id: string) {
   return data as TimeSlot
 }
 
-export async function updateTimeSlot(id: string, updates: Partial<TimeSlot>) {
+export async function updateTimeSlot(id: number, updates: Partial<TimeSlot>) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('time_slots')
     .update(updates)
@@ -42,6 +43,7 @@ export async function createTimeSlot(timeSlot: {
   price: number
   is_active?: boolean
 }) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('time_slots')
     .insert({
@@ -55,7 +57,8 @@ export async function createTimeSlot(timeSlot: {
   return data as TimeSlot
 }
 
-export async function deleteTimeSlot(id: string) {
+export async function deleteTimeSlot(id: number) {
+  const supabase = createClient()
   const { error } = await supabase
     .from('time_slots')
     .delete()

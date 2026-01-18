@@ -1,20 +1,26 @@
 import { createClient } from '@/lib/supabase/client'
 import type { Reservation, AvailableSlot } from '@/types/database'
 
-const supabase = createClient()
-
 export async function getReservations(filters?: {
   date?: string
   status?: string
   terrainId?: string
 }) {
+  const supabase = createClient()
+  
   let query = supabase
     .from('reservations')
     .select(`
-      *,
-      terrain:terrains(*),
-      time_slot:time_slots(*),
-      user:profiles(*)
+      id,
+      reservation_date,
+      status,
+      created_at,
+      terrain_id,
+      time_slot_id,
+      user_id,
+      terrain:terrains(id, code),
+      time_slot:time_slots(id, start_time, end_time, price),
+      user:profiles(id, first_name, last_name, email, phone)
     `)
     .order('reservation_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -31,18 +37,22 @@ export async function getReservations(filters?: {
 
   const { data, error } = await query
 
-  if (error) throw error
-  return data as Reservation[]
+  if (error) {
+    console.error('Error fetching reservations:', error)
+    throw error
+  }
+  return (data || []) as unknown as Reservation[]
 }
 
-export async function getReservationById(id: string) {
+export async function getReservationById(id: number) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('reservations')
     .select(`
       *,
-      terrain:terrains(*),
-      time_slot:time_slots(*),
-      user:profiles(*)
+      terrain:terrains(id, code, is_active),
+      time_slot:time_slots(id, start_time, end_time, price),
+      user:profiles(id, first_name, last_name, email, phone)
     `)
     .eq('id', id)
     .single()
@@ -51,7 +61,8 @@ export async function getReservationById(id: string) {
   return data as Reservation
 }
 
-export async function updateReservationStatus(id: string, status: string) {
+export async function updateReservationStatus(id: number, status: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('reservations')
     .update({ status, updated_at: new Date().toISOString() })
@@ -63,7 +74,8 @@ export async function updateReservationStatus(id: string, status: string) {
   return data as Reservation
 }
 
-export async function deleteReservation(id: string) {
+export async function deleteReservation(id: number) {
+  const supabase = createClient()
   const { error } = await supabase
     .from('reservations')
     .delete()
@@ -73,6 +85,7 @@ export async function deleteReservation(id: string) {
 }
 
 export async function getAvailableSlots(date: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .rpc('get_available_slots', { p_date: date })
 
@@ -81,12 +94,13 @@ export async function getAvailableSlots(date: string) {
 }
 
 export async function createReservation(reservation: {
-  terrain_id: string
-  time_slot_id: string
+  terrain_id: number
+  time_slot_id: number
   reservation_date: string
   user_id: string
   status?: string
 }) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('reservations')
     .insert({
@@ -95,8 +109,8 @@ export async function createReservation(reservation: {
     })
     .select(`
       *,
-      terrain:terrains(*),
-      time_slot:time_slots(*)
+      terrain:terrains(id, code),
+      time_slot:time_slots(id, start_time, end_time, price)
     `)
     .single()
 

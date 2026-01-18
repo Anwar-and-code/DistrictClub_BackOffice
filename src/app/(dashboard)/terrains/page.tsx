@@ -11,7 +11,7 @@ export default function TerrainsPage() {
   const [terrains, setTerrains] = useState<Terrain[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [modal, setModal] = useState<{ type: 'create' | 'edit', terrain?: Terrain } | null>(null)
-  const [formData, setFormData] = useState({ code: "", name: "" })
+  const [formData, setFormData] = useState({ code: "" })
   const [isSaving, setIsSaving] = useState(false)
 
   const loadTerrains = async () => {
@@ -33,26 +33,26 @@ export default function TerrainsPage() {
 
   const openModal = (type: 'create' | 'edit', terrain?: Terrain) => {
     if (terrain) {
-      setFormData({ code: terrain.code, name: terrain.name })
+      setFormData({ code: terrain.code })
     } else {
-      setFormData({ code: "", name: "" })
+      setFormData({ code: "" })
     }
     setModal({ type, terrain })
   }
 
   const handleSave = async () => {
-    if (!formData.code || !formData.name) {
-      toast.error("Veuillez remplir tous les champs")
+    if (!formData.code) {
+      toast.error("Veuillez entrer un code")
       return
     }
 
     setIsSaving(true)
     try {
       if (modal?.terrain) {
-        await updateTerrain(modal.terrain.id, formData)
+        await updateTerrain(modal.terrain.id, { code: formData.code })
         toast.success("Terrain mis à jour")
       } else {
-        await createTerrain(formData)
+        await createTerrain({ code: formData.code })
         toast.success("Terrain créé")
       }
       setModal(null)
@@ -141,7 +141,7 @@ export default function TerrainsPage() {
                   </button>
                 </div>
               </div>
-              <h3 className="font-medium text-neutral-950">{terrain.name}</h3>
+              <h3 className="font-medium text-neutral-950">Terrain {terrain.code}</h3>
               <p className="text-xs text-neutral-500 mt-1">
                 {terrain.is_active ? "Actif" : "Inactif"} · Créé le {new Date(terrain.created_at).toLocaleDateString('fr-FR')}
               </p>
@@ -172,16 +172,6 @@ export default function TerrainsPage() {
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   maxLength={2}
-                  className="mt-1.5 w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-neutral-600 uppercase tracking-wider">Nom</label>
-                <input
-                  type="text"
-                  placeholder="Terrain A"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="mt-1.5 w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
                 />
               </div>

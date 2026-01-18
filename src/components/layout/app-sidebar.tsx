@@ -8,6 +8,11 @@ import {
   Clock,
   LogOut,
   ChevronRight,
+  UserCog,
+  BarChart3,
+  Settings,
+  Bell,
+  Wallet,
 } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
 import Link from "next/link"
@@ -19,7 +24,14 @@ const menuItems = [
   { title: "Réservations", url: "/reservations", icon: Calendar },
   { title: "Terrains", url: "/terrains", icon: MapPin },
   { title: "Créneaux", url: "/creneaux", icon: Clock },
-  { title: "Utilisateurs", url: "/utilisateurs", icon: Users },
+  { title: "Joueurs", url: "/joueurs", icon: Users },
+]
+
+const adminMenuItems = [
+  { title: "Employés", url: "/employes", icon: UserCog },
+  { title: "Dépenses", url: "/depenses", icon: Wallet },
+  { title: "Statistiques", url: "/statistiques", icon: BarChart3 },
+  { title: "Paramètres", url: "/parametres", icon: Settings },
 ]
 
 export function AppSidebar() {
@@ -39,27 +51,58 @@ export function AppSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => {
-          const isActive = pathname === item.url || 
-            (item.url !== "/" && pathname.startsWith(item.url))
-          return (
-            <Link
-              key={item.url}
-              href={item.url}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                isActive
-                  ? "bg-white text-neutral-950"
-                  : "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              <span>{item.title}</span>
-              {isActive && <ChevronRight className="h-4 w-4 ml-auto" />}
-            </Link>
-          )
-        })}
+      <nav className="flex-1 px-3 py-6 overflow-y-auto">
+        <div className="space-y-1">
+          {menuItems.map((item) => {
+            const isActive = pathname === item.url || 
+              (item.url !== "/" && pathname.startsWith(item.url))
+            return (
+              <Link
+                key={item.url}
+                href={item.url}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-white text-neutral-950"
+                    : "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                <span>{item.title}</span>
+                {isActive && <ChevronRight className="h-4 w-4 ml-auto" />}
+              </Link>
+            )
+          })}
+        </div>
+
+        {/* Admin Section */}
+        <div className="mt-6 pt-6 border-t border-neutral-800">
+          <p className="px-3 mb-2 text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">
+            Administration
+          </p>
+          <div className="space-y-1">
+            {adminMenuItems.map((item) => {
+              const isActive = pathname === item.url || 
+                (item.url !== "/" && pathname.startsWith(item.url))
+              return (
+                <Link
+                  key={item.url}
+                  href={item.url}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-white text-neutral-950"
+                      : "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  <span>{item.title}</span>
+                  {isActive && <ChevronRight className="h-4 w-4 ml-auto" />}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
       </nav>
 
       {/* User */}
@@ -84,6 +127,21 @@ export function AppSidebar() {
             <LogOut className="h-4 w-4" />
           </button>
         </div>
+      </div>
+
+      {/* ArmaSOFT */}
+      <div className="px-6 py-4 border-t border-neutral-800">
+        <p className="text-xs text-neutral-600 text-center">
+          Propulsé par{" "}
+          <a
+            href="https://www.armasoft.ci"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-neutral-400 hover:text-white transition-colors"
+          >
+            ArmaSOFT
+          </a>
+        </p>
       </div>
     </aside>
   )

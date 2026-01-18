@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@/types/database'
 
-const supabase = createClient()
-
 export async function getUsers() {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
@@ -14,6 +13,7 @@ export async function getUsers() {
 }
 
 export async function getUserById(id: string) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
@@ -25,6 +25,7 @@ export async function getUserById(id: string) {
 }
 
 export async function updateUser(id: string, updates: Partial<User>) {
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('profiles')
     .update(updates)
@@ -37,6 +38,7 @@ export async function updateUser(id: string, updates: Partial<User>) {
 }
 
 export async function getUserReservationsCount(userId: string) {
+  const supabase = createClient()
   const { count, error } = await supabase
     .from('reservations')
     .select('*', { count: 'exact', head: true })

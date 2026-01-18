@@ -120,7 +120,15 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-8 text-center text-xs text-neutral-400">
-            © 2026 Padel House. Tous droits réservés.
+            Propulsé par{" "}
+            <a
+              href="https://www.armasoft.ci"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-neutral-600 hover:text-neutral-950 transition-colors"
+            >
+              ArmaSOFT
+            </a>
           </p>
         </div>
       </div>

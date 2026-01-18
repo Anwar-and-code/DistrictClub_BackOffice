@@ -10,14 +10,15 @@ import { cn } from "@/lib/utils"
 const statusConfig: Record<ReservationStatus, { label: string; color: string; bg: string }> = {
   CONFIRMED: { label: "Confirmé", color: "text-emerald-700", bg: "bg-emerald-50" },
   PENDING: { label: "En attente", color: "text-amber-700", bg: "bg-amber-50" },
-  CANCELLED: { label: "Annulé", color: "text-neutral-500", bg: "bg-neutral-100" },
+  CANCELED: { label: "Annulé", color: "text-neutral-500", bg: "bg-neutral-100" },
+  EXPIRED: { label: "Expiré", color: "text-red-700", bg: "bg-red-50" },
 }
 
 const statusFilters = [
   { value: "", label: "Tous" },
   { value: "CONFIRMED", label: "Confirmés" },
   { value: "PENDING", label: "En attente" },
-  { value: "CANCELLED", label: "Annulés" },
+  { value: "CANCELED", label: "Annulés" },
 ]
 
 export default function ReservationsPage() {
@@ -48,7 +49,7 @@ export default function ReservationsPage() {
     loadReservations()
   }, [searchDate, statusFilter])
 
-  const handleStatusChange = async (id: string, newStatus: ReservationStatus) => {
+  const handleStatusChange = async (id: number, newStatus: ReservationStatus) => {
     setIsUpdating(true)
     try {
       await updateReservationStatus(id, newStatus)
@@ -166,7 +167,7 @@ export default function ReservationsPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div>
-                        <p className="text-sm font-medium text-neutral-950">{reservation.user?.full_name || "—"}</p>
+                        <p className="text-sm font-medium text-neutral-950">{reservation.user?.first_name && reservation.user?.last_name ? `${reservation.user.first_name} ${reservation.user.last_name}` : reservation.user?.first_name || reservation.user?.last_name || "—"}</p>
                         <p className="text-xs text-neutral-500">{reservation.user?.phone || reservation.user?.email}</p>
                       </div>
                     </td>
@@ -191,7 +192,7 @@ export default function ReservationsPage() {
                             <CheckCircle className="h-4 w-4" />
                           </button>
                         )}
-                        {reservation.status !== 'CANCELLED' && (
+                        {reservation.status !== 'CANCELED' && (
                           <button
                             onClick={() => setCancelModal(reservation)}
                             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -227,7 +228,7 @@ export default function ReservationsPage() {
                 Annuler
               </button>
               <button
-                onClick={() => handleStatusChange(cancelModal.id, 'CANCELLED')}
+                onClick={() => handleStatusChange(cancelModal.id, 'CANCELED')}
                 disabled={isUpdating}
                 className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >

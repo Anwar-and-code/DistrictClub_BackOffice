@@ -2,6 +2,7 @@
 
 import { AuthProvider, useAuth } from "@/components/providers/auth-provider"
 import { AppSidebar } from "@/components/layout/app-sidebar"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { isLoading, employee } = useAuth()
@@ -27,6 +28,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-neutral-50">
       <AppSidebar />
       <main className="ml-64">
+        {/* Top Bar */}
+        <div className="sticky top-0 z-30 h-16 bg-white/80 backdrop-blur-sm border-b border-neutral-200 flex items-center justify-end px-8">
+          <NotificationBell />
+        </div>
         {children}
       </main>
     </div>
