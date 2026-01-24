@@ -20,7 +20,7 @@ export async function getReservations(filters?: {
       user_id,
       terrain:terrains(id, code),
       time_slot:time_slots(id, start_time, end_time, price),
-      user:profiles(id, first_name, last_name, email, phone)
+      user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone)
     `)
     .order('reservation_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -52,7 +52,7 @@ export async function getReservationById(id: number) {
       *,
       terrain:terrains(id, code, is_active),
       time_slot:time_slots(id, start_time, end_time, price),
-      user:profiles(id, first_name, last_name, email, phone)
+      user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone)
     `)
     .eq('id', id)
     .single()
