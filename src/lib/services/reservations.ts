@@ -1,6 +1,25 @@
 import { createClient } from '@/lib/supabase/client'
 import type { Reservation, AvailableSlot } from '@/types/database'
 
+export async function isSlotAvailable(
+  terrainId: number,
+  timeSlotId: number,
+  date: string
+): Promise<boolean> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('id')
+    .eq('terrain_id', terrainId)
+    .eq('time_slot_id', timeSlotId)
+    .eq('reservation_date', date)
+    .neq('status', 'CANCELED')
+    .limit(1)
+
+  if (error) throw error
+  return !data || data.length === 0
+}
+
 export async function getReservations(filters?: {
   date?: string
   status?: string
@@ -18,9 +37,11 @@ export async function getReservations(filters?: {
       terrain_id,
       time_slot_id,
       user_id,
+      client_id,
       terrain:terrains(id, code),
       time_slot:time_slots(id, start_time, end_time, price),
-      user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone)
+      user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
+      client:clients(id, full_name, phone)
     `)
     .order('reservation_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -105,6 +126,57 @@ export async function createReservation(reservation: {
     .from('reservations')
     .insert({
       ...reservation,
+      status: reservation.status || 'CONFIRMED',
+    })
+    .select(`
+      *,
+      terrain:terrains(id, code),
+      time_slot:time_slots(id, start_time, end_time, price)
+    `)
+    .single()
+
+  if (error) throw error
+  return data as Reservation
+}
+
+const MANUAL_RESERVATION_USER_ID = 'fdf34d9a-5024-4f27-8e46-0f34151f7d7c'
+
+async function getManualReservationUserId(): Promise<string> {
+  try {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('manual_reservation_user_id')
+      .eq('id', 1)
+      .single()
+    
+    if (error || !data?.manual_reservation_user_id) {
+      return MANUAL_RESERVATION_USER_ID
+    }
+    return data.manual_reservation_user_id
+  } catch {
+    return MANUAL_RESERVATION_USER_ID
+  }
+}
+
+export async function createReservationWithClient(reservation: {
+  terrain_id: number
+  time_slot_id: number
+  reservation_date: string
+  client_id: string
+  status?: string
+}) {
+  const supabase = createClient()
+  const userId = await getManualReservationUserId()
+  
+  const { data, error } = await supabase
+    .from('reservations')
+    .insert({
+      terrain_id: reservation.terrain_id,
+      time_slot_id: reservation.time_slot_id,
+      reservation_date: reservation.reservation_date,
+      user_id: userId,
+      client_id: reservation.client_id,
       status: reservation.status || 'CONFIRMED',
     })
     .select(`

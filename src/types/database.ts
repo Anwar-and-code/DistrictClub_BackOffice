@@ -1,4 +1,4 @@
-export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'CANCELED' | 'EXPIRED'
+export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'PAID' | 'CANCELED' | 'EXPIRED'
 
 export interface Terrain {
   id: number
@@ -16,18 +16,28 @@ export interface TimeSlot {
   created_at: string
 }
 
+export interface Client {
+  id: string
+  full_name: string
+  phone: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Reservation {
   id: number
   terrain_id: number
   time_slot_id: number
   reservation_date: string
   user_id: string
+  client_id?: string | null
   status: ReservationStatus
   created_at: string
   updated_at: string
   terrain?: Terrain
   time_slot?: TimeSlot
   user?: User
+  client?: Client | null
 }
 
 export interface User {

@@ -20,6 +20,14 @@ interface AppSettings {
   notifications_enabled: boolean
   email_notifications: boolean
   sms_notifications: boolean
+  manual_reservation_user_id: string | null
+}
+
+interface Profile {
+  id: string
+  email: string
+  first_name: string | null
+  last_name: string | null
 }
 
 const defaultSettings: AppSettings = {
@@ -36,6 +44,7 @@ const defaultSettings: AppSettings = {
   notifications_enabled: true,
   email_notifications: true,
   sms_notifications: false,
+  manual_reservation_user_id: null,
 }
 
 export default function ParametresPage() {
@@ -43,6 +52,7 @@ export default function ParametresPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'general' | 'horaires' | 'reservations' | 'notifications'>('general')
+  const [profiles, setProfiles] = useState<Profile[]>([])
   const supabase = createClient()
 
   const loadSettings = async () => {
@@ -64,8 +74,23 @@ export default function ParametresPage() {
     }
   }
 
+  const loadProfiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, first_name, last_name')
+        .order('email')
+      
+      if (error) throw error
+      setProfiles(data || [])
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   useEffect(() => {
     loadSettings()
+    loadProfiles()
   }, [])
 
   const handleSave = async () => {
@@ -287,6 +312,23 @@ export default function ParametresPage() {
                         <option value="EUR">EUR (Euro)</option>
                         <option value="USD">USD (Dollar US)</option>
                       </select>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-neutral-200">
+                      <label className="text-xs font-medium text-neutral-600 uppercase tracking-wider">Réservation manuelle - Utilisateur par défaut</label>
+                      <select
+                        value={settings.manual_reservation_user_id || ''}
+                        onChange={(e) => setSettings({ ...settings, manual_reservation_user_id: e.target.value || null })}
+                        className="mt-1.5 w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950 bg-white"
+                      >
+                        <option value="">-- Sélectionner un utilisateur --</option>
+                        {profiles.map((profile) => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.email} {profile.first_name && profile.last_name ? `(${profile.first_name} ${profile.last_name})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-neutral-500 mt-1">Utilisateur associé aux réservations créées manuellement depuis le backoffice</p>
                     </div>
                   </div>
                 </div>
