@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { 
-  Clock, AlertTriangle, Wallet,
-  Banknote, Package, CalendarCheck, TrendingUp, CalendarDays
+  Clock, Wallet, Banknote, TrendingUp, CalendarDays,
+  CircleDot, Monitor
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
@@ -186,8 +186,8 @@ export default function DashboardPage() {
     return (
       <div className="p-8 space-y-6">
         <div className="h-8 w-64 bg-neutral-200 rounded-lg animate-pulse" />
-        <div className="grid grid-cols-5 gap-4">
-          {[1, 2, 3, 4, 5].map((i) => (
+        <div className="grid grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="bg-white rounded-xl p-5 border border-neutral-200 animate-pulse h-32" />
           ))}
         </div>
@@ -289,13 +289,13 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 5 Cartes KPI principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* 4 Cartes KPI principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 1. Padel - Encaissé / Total réservé */}
         <div className="bg-white rounded-xl p-5 border border-neutral-200 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
-            <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-              <Banknote className="h-5 w-5 text-emerald-600" />
+            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+              <CircleDot className="h-5 w-5 text-blue-600" />
             </div>
             <span className={cn(
               "text-xs font-medium px-2 py-1 rounded-full",
@@ -307,15 +307,12 @@ export default function DashboardPage() {
             </span>
           </div>
           <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium mb-1">Padel</p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(stats?.paidRevenue || 0)}</p>
-            <span className="text-neutral-400">/</span>
-            <p className="text-lg font-semibold text-neutral-500">{formatCurrency(stats?.totalReserved || 0)}</p>
-          </div>
-          <div className="mt-3 pt-2 border-t border-neutral-100">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-neutral-500">Encaissé / Total réservé</span>
-            </div>
+          <p className="text-2xl font-bold text-blue-600">{formatCurrency(stats?.paidRevenue || 0)}</p>
+          <p className="text-lg font-semibold text-neutral-500">{formatCurrency(stats?.totalReserved || 0)}</p>
+          <div className="mt-2 pt-2 border-t border-neutral-100">
+            <Link href="/reservations" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+              Voir détails →
+            </Link>
           </div>
         </div>
 
@@ -343,8 +340,8 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="flex items-center justify-between mb-3">
-            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Package className="h-5 w-5 text-blue-600" />
+            <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+              <Monitor className="h-5 w-5 text-purple-600" />
             </div>
           </div>
           <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium mb-1">Caisse</p>
@@ -354,63 +351,31 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 4. Réservations */}
-        <div className="bg-white rounded-xl p-5 border border-neutral-200 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <CalendarCheck className="h-5 w-5 text-purple-600" />
-            </div>
-            {stats && stats.pendingReservations > 0 && (
-              <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded-full">
-                {stats.pendingReservations} en attente
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium mb-1">Réservations</p>
-          <p className="text-2xl font-bold text-neutral-900">{stats?.periodReservations || 0}</p>
-          <div className="mt-2 pt-2 border-t border-neutral-100">
-            <p className="text-xs text-neutral-500">
-              Confirmées + Payées
-            </p>
-          </div>
-        </div>
-
-        {/* 5. Alertes Stock */}
+        {/* 4. Fond Net = Padel payé - Dépenses */}
         <div className="bg-white rounded-xl p-5 border border-neutral-200 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
             <div className={cn(
               "h-10 w-10 rounded-lg flex items-center justify-center",
-              stats && stats.lowStockProducts.length > 0 ? "bg-amber-100" : "bg-emerald-100"
+              (stats?.paidRevenue || 0) - (stats?.periodExpenses || 0) >= 0 ? "bg-emerald-100" : "bg-orange-100"
             )}>
-              <AlertTriangle className={cn(
+              <Banknote className={cn(
                 "h-5 w-5",
-                stats && stats.lowStockProducts.length > 0 ? "text-amber-600" : "text-emerald-600"
+                (stats?.paidRevenue || 0) - (stats?.periodExpenses || 0) >= 0 ? "text-emerald-600" : "text-orange-600"
               )} />
             </div>
-            {stats && stats.lowStockProducts.length > 0 && (
-              <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded-full">
-                {stats.lowStockProducts.length} produit{stats.lowStockProducts.length > 1 ? 's' : ''}
-              </span>
-            )}
           </div>
-          <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium mb-1">Alertes Stock</p>
-          {stats && stats.lowStockProducts.length > 0 ? (
-            <div className="space-y-1.5 mt-2">
-              {stats.lowStockProducts.slice(0, 2).map((product, idx) => (
-                <div key={idx} className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-700 truncate max-w-[100px]">{product.name}</span>
-                  <span className="text-amber-600 font-medium">{product.quantity} restant{product.quantity > 1 ? 's' : ''}</span>
-                </div>
-              ))}
-              {stats.lowStockProducts.length > 2 && (
-                <Link href="/produits" className="text-xs text-blue-600 hover:text-blue-700 font-medium block mt-1">
-                  +{stats.lowStockProducts.length - 2} autres →
-                </Link>
-              )}
-            </div>
-          ) : (
-            <p className="text-lg font-semibold text-emerald-600 mt-1">Tout est OK</p>
-          )}
+          <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium mb-1">Fond Net</p>
+          <p className={cn(
+            "text-2xl font-bold",
+            (stats?.paidRevenue || 0) - (stats?.periodExpenses || 0) >= 0 ? "text-emerald-600" : "text-orange-600"
+          )}>
+            {(stats?.paidRevenue || 0) - (stats?.periodExpenses || 0) >= 0 ? '+' : ''}{formatCurrency((stats?.paidRevenue || 0) - (stats?.periodExpenses || 0))}
+          </p>
+          <div className="mt-2 pt-2 border-t border-neutral-100">
+            <p className="text-xs text-neutral-500">
+              Padel payé - Dépenses
+            </p>
+          </div>
         </div>
       </div>
 
