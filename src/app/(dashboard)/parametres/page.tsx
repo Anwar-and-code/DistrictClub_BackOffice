@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Settings, Building2, Clock, CreditCard, Bell, Save, Check } from "lucide-react"
+import { Settings, Building2, Clock, CreditCard, Bell, Save, Check, Wallet, GripVertical, Lock } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -21,6 +21,7 @@ interface AppSettings {
   email_notifications: boolean
   sms_notifications: boolean
   manual_reservation_user_id: string | null
+  security_code: string
 }
 
 interface Profile {
@@ -28,6 +29,13 @@ interface Profile {
   email: string
   first_name: string | null
   last_name: string | null
+}
+
+interface PaymentMethod {
+  id: number
+  name: string
+  is_active: boolean
+  display_order: number
 }
 
 const defaultSettings: AppSettings = {
@@ -45,13 +53,15 @@ const defaultSettings: AppSettings = {
   email_notifications: true,
   sms_notifications: false,
   manual_reservation_user_id: null,
+  security_code: "0451373",
 }
 
 export default function ParametresPage() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'general' | 'horaires' | 'reservations' | 'notifications'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'horaires' | 'reservations' | 'paiements' | 'securite' | 'notifications'>('general')
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const supabase = createClient()
 
@@ -88,9 +98,41 @@ export default function ParametresPage() {
     }
   }
 
+  const loadPaymentMethods = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .order('display_order')
+      
+      console.log('Payment methods:', data, 'Error:', error)
+      if (error) throw error
+      setPaymentMethods(data || [])
+    } catch (error) {
+      console.error('Load payment methods error:', error)
+    }
+  }
+
+  const togglePaymentMethod = async (id: number, is_active: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('payment_methods')
+        .update({ is_active, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      
+      if (error) throw error
+      setPaymentMethods(prev => prev.map(pm => pm.id === id ? { ...pm, is_active } : pm))
+      toast.success(is_active ? "Mode de paiement activé" : "Mode de paiement désactivé")
+    } catch (error) {
+      console.error(error)
+      toast.error("Erreur lors de la mise à jour")
+    }
+  }
+
   useEffect(() => {
     loadSettings()
     loadProfiles()
+    loadPaymentMethods()
   }, [])
 
   const handleSave = async () => {
@@ -114,6 +156,8 @@ export default function ParametresPage() {
     { id: 'general', label: 'Général', icon: Building2 },
     { id: 'horaires', label: 'Horaires', icon: Clock },
     { id: 'reservations', label: 'Réservations', icon: CreditCard },
+    { id: 'paiements', label: 'Mode de paiement', icon: Wallet },
+    { id: 'securite', label: 'Code de sécurité', icon: Lock },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ] as const
 
@@ -192,7 +236,7 @@ export default function ParametresPage() {
                       <label className="text-xs font-medium text-neutral-600 uppercase tracking-wider">Téléphone</label>
                       <input
                         type="tel"
-                        value={settings.business_phone}
+                        value={settings.business_phone ?? ''}
                         onChange={(e) => setSettings({ ...settings, business_phone: e.target.value })}
                         placeholder="+225 XX XX XX XX XX"
                         className="mt-1.5 w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
@@ -202,7 +246,7 @@ export default function ParametresPage() {
                       <label className="text-xs font-medium text-neutral-600 uppercase tracking-wider">Email</label>
                       <input
                         type="email"
-                        value={settings.business_email}
+                        value={settings.business_email ?? ''}
                         onChange={(e) => setSettings({ ...settings, business_email: e.target.value })}
                         placeholder="contact@padelhouse.ci"
                         className="mt-1.5 w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
@@ -211,7 +255,7 @@ export default function ParametresPage() {
                     <div className="col-span-2">
                       <label className="text-xs font-medium text-neutral-600 uppercase tracking-wider">Adresse</label>
                       <textarea
-                        value={settings.business_address}
+                        value={settings.business_address ?? ''}
                         onChange={(e) => setSettings({ ...settings, business_address: e.target.value })}
                         placeholder="Abidjan, Côte d'Ivoire"
                         rows={2}
@@ -330,6 +374,80 @@ export default function ParametresPage() {
                       </select>
                       <p className="text-xs text-neutral-500 mt-1">Utilisateur associé aux réservations créées manuellement depuis le backoffice</p>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Paiements Tab */}
+              {activeTab === 'paiements' && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-neutral-950 mb-1">Modes de paiement</h3>
+                    <p className="text-sm text-neutral-500 mb-6">Gérez les modes de paiement acceptés</p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {paymentMethods.map((method) => (
+                      <div
+                        key={method.id}
+                        className="flex items-center justify-between p-4 rounded-lg border border-neutral-200 bg-white"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="text-neutral-400">
+                            <GripVertical className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-neutral-950">{method.name}</p>
+                          </div>
+                        </div>
+                        <label className="relative cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={method.is_active}
+                            onChange={(e) => togglePaymentMethod(method.id, e.target.checked)}
+                            className="sr-only"
+                          />
+                          <div className={cn(
+                            "w-11 h-6 rounded-full transition-colors",
+                            method.is_active ? "bg-neutral-950" : "bg-neutral-200"
+                          )}>
+                            <div className={cn(
+                              "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm",
+                              method.is_active && "translate-x-5"
+                            )} />
+                          </div>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+
+                  {paymentMethods.length === 0 && (
+                    <div className="text-center py-8 text-neutral-500">
+                      <Wallet className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm">Aucun mode de paiement configuré</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sécurité Tab */}
+              {activeTab === 'securite' && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-neutral-950 mb-1">Code de sécurité</h3>
+                    <p className="text-sm text-neutral-500 mb-6">Code utilisé pour les opérations sensibles</p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-xs font-medium text-neutral-600 uppercase tracking-wider">Code de sécurité</label>
+                    <input
+                      type="text"
+                      value={settings.security_code ?? ''}
+                      onChange={(e) => setSettings({ ...settings, security_code: e.target.value })}
+                      placeholder="Entrez le code de sécurité"
+                      className="mt-1.5 w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950 font-mono tracking-widest"
+                    />
+                    <p className="text-xs text-neutral-500 mt-1">Ce code sera demandé pour valider certaines actions</p>
                   </div>
                 </div>
               )}
