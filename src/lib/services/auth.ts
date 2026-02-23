@@ -18,7 +18,7 @@ export async function loginEmployee(username: string, password: string): Promise
     })
 
   if (error) {
-    console.error('Login error:', error)
+    console.error('Login error:', error.message, error.code, error.details, error.hint)
     throw new Error('Erreur de connexion')
   }
 

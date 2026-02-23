@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Settings, Building2, Clock, CreditCard, Bell, Save, Check, Wallet, GripVertical, Lock } from "lucide-react"
+import { Settings, Building2, Clock, CreditCard, Bell, Save, Check, Wallet, GripVertical, Lock, ShoppingBag, LayoutGrid, Plus, Pencil, Trash2, X, Circle, Square, RectangleHorizontal, Users } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -22,6 +22,7 @@ interface AppSettings {
   sms_notifications: boolean
   manual_reservation_user_id: string | null
   security_code: string
+  default_tax_rate: number
 }
 
 interface Profile {
@@ -36,6 +37,16 @@ interface PaymentMethod {
   name: string
   is_active: boolean
   display_order: number
+}
+
+interface PosTable {
+  id: number
+  name: string
+  capacity: number
+  position_x: number
+  position_y: number
+  shape: 'round' | 'square' | 'rectangle'
+  is_active: boolean
 }
 
 const defaultSettings: AppSettings = {
@@ -54,15 +65,20 @@ const defaultSettings: AppSettings = {
   sms_notifications: false,
   manual_reservation_user_id: null,
   security_code: "0451373",
+  default_tax_rate: 0,
 }
 
 export default function ParametresPage() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'general' | 'horaires' | 'reservations' | 'paiements' | 'securite' | 'notifications'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'horaires' | 'reservations' | 'caisse' | 'tables' | 'paiements' | 'securite' | 'notifications'>('general')
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
+  const [tables, setTables] = useState<PosTable[]>([])
+  const [tableModal, setTableModal] = useState<{ type: 'create' | 'edit'; table?: PosTable } | null>(null)
+  const [tableForm, setTableForm] = useState({ name: '', capacity: '2', shape: 'round' as 'round' | 'square' | 'rectangle' })
+  const [isSavingTable, setIsSavingTable] = useState(false)
   const supabase = createClient()
 
   const loadSettings = async () => {
@@ -129,10 +145,73 @@ export default function ParametresPage() {
     }
   }
 
+  const loadTables = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pos_tables')
+        .select('*')
+        .order('name')
+      if (error) throw error
+      setTables(data || [])
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  const openTableModal = (type: 'create' | 'edit', table?: PosTable) => {
+    if (type === 'edit' && table) {
+      setTableForm({ name: table.name, capacity: table.capacity.toString(), shape: table.shape })
+    } else {
+      setTableForm({ name: '', capacity: '2', shape: 'round' })
+    }
+    setTableModal({ type, table })
+  }
+
+  const handleSaveTable = async () => {
+    if (!tableForm.name.trim()) { toast.error('Le nom est obligatoire'); return }
+    setIsSavingTable(true)
+    try {
+      const payload = {
+        name: tableForm.name.trim(),
+        capacity: parseInt(tableForm.capacity) || 2,
+        shape: tableForm.shape,
+      }
+      if (tableModal?.type === 'edit' && tableModal.table) {
+        const { error } = await supabase.from('pos_tables').update(payload).eq('id', tableModal.table.id)
+        if (error) throw error
+        toast.success('Table modifiée')
+      } else {
+        const { error } = await supabase.from('pos_tables').insert(payload)
+        if (error) throw error
+        toast.success('Table créée')
+      }
+      setTableModal(null)
+      loadTables()
+    } catch (error) {
+      console.error(error)
+      toast.error('Erreur lors de l\'enregistrement')
+    } finally {
+      setIsSavingTable(false)
+    }
+  }
+
+  const handleDeleteTable = async (id: number) => {
+    try {
+      const { error } = await supabase.from('pos_tables').update({ is_active: false }).eq('id', id)
+      if (error) throw error
+      toast.success('Table supprimée')
+      loadTables()
+    } catch (error) {
+      console.error(error)
+      toast.error('Erreur lors de la suppression')
+    }
+  }
+
   useEffect(() => {
     loadSettings()
     loadProfiles()
     loadPaymentMethods()
+    loadTables()
   }, [])
 
   const handleSave = async () => {
@@ -156,6 +235,8 @@ export default function ParametresPage() {
     { id: 'general', label: 'Général', icon: Building2 },
     { id: 'horaires', label: 'Horaires', icon: Clock },
     { id: 'reservations', label: 'Réservations', icon: CreditCard },
+    { id: 'caisse', label: 'Caisse & Produits', icon: ShoppingBag },
+    { id: 'tables', label: 'Plan de salle', icon: LayoutGrid },
     { id: 'paiements', label: 'Mode de paiement', icon: Wallet },
     { id: 'securite', label: 'Code de sécurité', icon: Lock },
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -378,6 +459,109 @@ export default function ParametresPage() {
                 </div>
               )}
 
+              {/* Caisse Tab */}
+              {activeTab === 'caisse' && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-neutral-950 mb-1">Caisse & Produits</h3>
+                    <p className="text-sm text-neutral-500 mb-6">Paramètres par défaut pour la tarification des produits</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-medium text-neutral-600 uppercase tracking-wider">Taux de taxe par défaut (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={settings.default_tax_rate}
+                        onChange={(e) => setSettings({ ...settings, default_tax_rate: parseFloat(e.target.value) || 0 })}
+                        className="mt-1.5 w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
+                      />
+                      <p className="text-xs text-neutral-500 mt-1">Ce taux sera appliqué par défaut lors de la création d'un nouveau produit (0% = pas de taxe)</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-neutral-50 rounded-lg">
+                    <p className="text-sm text-neutral-600">
+                      <strong>Note :</strong> Les produits existants ne seront pas affectés par ce changement. Seuls les nouveaux produits utiliseront ce taux par défaut.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tables Tab */}
+              {activeTab === 'tables' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-neutral-950 mb-1">Plan de salle</h3>
+                      <p className="text-sm text-neutral-500">Gérez les tables du café pour les commandes table</p>
+                    </div>
+                    <button
+                      onClick={() => openTableModal('create')}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Ajouter une table
+                    </button>
+                  </div>
+
+                  {tables.filter(t => t.is_active).length === 0 ? (
+                    <div className="text-center py-12 text-neutral-400">
+                      <LayoutGrid className="h-12 w-12 mx-auto mb-3 stroke-1" />
+                      <p className="text-sm">Aucune table configurée</p>
+                      <p className="text-xs mt-1">Ajoutez des tables pour utiliser les commandes table dans la caisse</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {tables.filter(t => t.is_active).map((table) => (
+                        <div
+                          key={table.id}
+                          className="relative group border border-neutral-200 rounded-xl p-4 bg-white hover:border-neutral-300 transition-colors"
+                        >
+                          <div className="flex items-center justify-center mb-3">
+                            {table.shape === 'round' ? (
+                              <div className="h-14 w-14 rounded-full bg-neutral-100 border-2 border-neutral-300 flex items-center justify-center">
+                                <span className="text-sm font-bold text-neutral-600">{table.name}</span>
+                              </div>
+                            ) : table.shape === 'rectangle' ? (
+                              <div className="h-10 w-20 rounded-lg bg-neutral-100 border-2 border-neutral-300 flex items-center justify-center">
+                                <span className="text-sm font-bold text-neutral-600">{table.name}</span>
+                              </div>
+                            ) : (
+                              <div className="h-14 w-14 rounded-lg bg-neutral-100 border-2 border-neutral-300 flex items-center justify-center">
+                                <span className="text-sm font-bold text-neutral-600">{table.name}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-neutral-500 flex items-center justify-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {table.capacity} place{table.capacity > 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => openTableModal('edit', table)}
+                              className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTable(table.id)}
+                              className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Paiements Tab */}
               {activeTab === 'paiements' && (
                 <div className="space-y-6">
@@ -547,6 +731,85 @@ export default function ParametresPage() {
           )}
         </div>
       </div>
+
+      {/* ─── Table Modal ─────────────────────────────────────────────── */}
+      {tableModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-neutral-950">
+                {tableModal.type === 'create' ? 'Nouvelle table' : 'Modifier la table'}
+              </h2>
+              <button onClick={() => setTableModal(null)} className="p-2 hover:bg-neutral-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Nom *</label>
+                <input
+                  type="text"
+                  value={tableForm.name}
+                  onChange={(e) => setTableForm({ ...tableForm, name: e.target.value })}
+                  placeholder="Ex: T1, Table VIP..."
+                  className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Capacité</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={tableForm.capacity}
+                  onChange={(e) => setTableForm({ ...tableForm, capacity: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Forme</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: 'round', label: 'Ronde', Icon: Circle },
+                    { value: 'square', label: 'Carrée', Icon: Square },
+                    { value: 'rectangle', label: 'Rectangle', Icon: RectangleHorizontal },
+                  ] as const).map(({ value, label, Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setTableForm({ ...tableForm, shape: value })}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 transition-all text-xs font-medium",
+                        tableForm.shape === value
+                          ? "border-neutral-900 bg-neutral-50 text-neutral-900"
+                          : "border-neutral-200 text-neutral-500 hover:border-neutral-300"
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveTable}
+              disabled={isSavingTable}
+              className="w-full mt-6 py-3 bg-neutral-900 text-white text-sm font-semibold rounded-xl hover:bg-neutral-800 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {isSavingTable ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  {tableModal.type === 'create' ? 'Créer' : 'Enregistrer'}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

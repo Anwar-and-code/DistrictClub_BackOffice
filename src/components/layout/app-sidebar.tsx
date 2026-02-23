@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   Calendar,
   LayoutDashboard,
@@ -8,32 +9,174 @@ import {
   Clock,
   LogOut,
   ChevronRight,
+  ChevronDown,
   UserCog,
   BarChart3,
   Settings,
-  Bell,
   Wallet,
+  ShoppingBag,
+  Package,
+  List,
+  ShoppingCart,
+  ArrowLeftRight,
 } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
-const menuItems = [
+interface MenuItem {
+  title: string
+  url: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+interface MenuGroup {
+  title: string
+  icon: React.ComponentType<{ className?: string }>
+  basePath: string
+  children: MenuItem[]
+}
+
+type NavItem = MenuItem | MenuGroup
+
+function isGroup(item: NavItem): item is MenuGroup {
+  return "children" in item
+}
+
+// ─── Navigation ──────────────────────────────────────────────────────
+const mainItems: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Caisse", url: "/caisse", icon: ShoppingBag },
+]
+
+const gestionItems: NavItem[] = [
   { title: "Réservations", url: "/reservations", icon: Calendar },
   { title: "Terrains", url: "/terrains", icon: MapPin },
   { title: "Créneaux", url: "/creneaux", icon: Clock },
   { title: "Joueurs", url: "/joueurs", icon: Users },
+  {
+    title: "Produits",
+    icon: Package,
+    basePath: "/produits",
+    children: [
+      { title: "Liste", url: "/produits", icon: List },
+      { title: "Achats", url: "/produits/achats", icon: ShoppingCart },
+      { title: "Mouvements", url: "/produits/mouvements", icon: ArrowLeftRight },
+    ],
+  },
 ]
 
-const adminMenuItems = [
+const adminItems: NavItem[] = [
   { title: "Employés", url: "/employes", icon: UserCog },
   { title: "Dépenses", url: "/depenses", icon: Wallet },
   { title: "Statistiques", url: "/statistiques", icon: BarChart3 },
   { title: "Paramètres", url: "/parametres", icon: Settings },
 ]
 
+// ─── Nav Link Component ──────────────────────────────────────────────
+function NavLink({
+  item,
+  pathname,
+  indent = false,
+}: {
+  item: MenuItem
+  pathname: string
+  indent?: boolean
+}) {
+  const isActive =
+    pathname === item.url ||
+    (item.url !== "/" && pathname.startsWith(item.url + "/"))
+  const Icon = item.icon
+
+  return (
+    <Link
+      href={item.url}
+      className={cn(
+        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+        indent && "pl-10",
+        isActive
+          ? "bg-white text-neutral-950"
+          : "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      <span>{item.title}</span>
+      {isActive && !indent && <ChevronRight className="h-4 w-4 ml-auto" />}
+    </Link>
+  )
+}
+
+// ─── Nav Group Component (dropdown) ──────────────────────────────────
+function NavGroup({
+  group,
+  pathname,
+}: {
+  group: MenuGroup
+  pathname: string
+}) {
+  const isGroupActive = pathname.startsWith(group.basePath)
+  const [open, setOpen] = useState(isGroupActive)
+  const Icon = group.icon
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+          isGroupActive
+            ? "text-white"
+            : "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+        )}
+      >
+        <Icon className="h-4 w-4" />
+        <span>{group.title}</span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 ml-auto transition-transform duration-200",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-1 space-y-0.5">
+          {group.children.map((child) => (
+            <NavLink
+              key={child.url}
+              item={child}
+              pathname={pathname}
+              indent
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Render section helper ───────────────────────────────────────────
+function NavSection({
+  items,
+  pathname,
+}: {
+  items: NavItem[]
+  pathname: string
+}) {
+  return (
+    <div className="space-y-0.5">
+      {items.map((item) =>
+        isGroup(item) ? (
+          <NavGroup key={item.basePath} group={item} pathname={pathname} />
+        ) : (
+          <NavLink key={item.url} item={item} pathname={pathname} />
+        )
+      )}
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════════
 export function AppSidebar() {
   const pathname = usePathname()
   const { employee, logout } = useAuth()
@@ -51,57 +194,24 @@ export function AppSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-6 overflow-y-auto">
-        <div className="space-y-1">
-          {menuItems.map((item) => {
-            const isActive = pathname === item.url || 
-              (item.url !== "/" && pathname.startsWith(item.url))
-            return (
-              <Link
-                key={item.url}
-                href={item.url}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-white text-neutral-950"
-                    : "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                <span>{item.title}</span>
-                {isActive && <ChevronRight className="h-4 w-4 ml-auto" />}
-              </Link>
-            )
-          })}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-6">
+        {/* Main */}
+        <NavSection items={mainItems} pathname={pathname} />
+
+        {/* Gestion */}
+        <div>
+          <p className="px-3 mb-2 text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">
+            Gestion
+          </p>
+          <NavSection items={gestionItems} pathname={pathname} />
         </div>
 
-        {/* Admin Section */}
-        <div className="mt-6 pt-6 border-t border-neutral-800">
+        {/* Administration */}
+        <div>
           <p className="px-3 mb-2 text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">
             Administration
           </p>
-          <div className="space-y-1">
-            {adminMenuItems.map((item) => {
-              const isActive = pathname === item.url || 
-                (item.url !== "/" && pathname.startsWith(item.url))
-              return (
-                <Link
-                  key={item.url}
-                  href={item.url}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                    isActive
-                      ? "bg-white text-neutral-950"
-                      : "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.title}</span>
-                  {isActive && <ChevronRight className="h-4 w-4 ml-auto" />}
-                </Link>
-              )
-            })}
-          </div>
+          <NavSection items={adminItems} pathname={pathname} />
         </div>
       </nav>
 
