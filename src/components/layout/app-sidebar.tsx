@@ -25,16 +25,20 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
+import { PERMISSIONS } from "@/lib/permissions"
+
 interface MenuItem {
   title: string
   url: string
   icon: React.ComponentType<{ className?: string }>
+  permission?: string
 }
 
 interface MenuGroup {
   title: string
   icon: React.ComponentType<{ className?: string }>
   basePath: string
+  permission?: string
   children: MenuItem[]
 }
 
@@ -46,19 +50,20 @@ function isGroup(item: NavItem): item is MenuGroup {
 
 // ─── Navigation ──────────────────────────────────────────────────────
 const mainItems: NavItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Caisse", url: "/caisse", icon: ShoppingBag },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, permission: PERMISSIONS.DASHBOARD_VIEW },
+  { title: "Caisse", url: "/caisse", icon: ShoppingBag, permission: PERMISSIONS.CAISSE_VIEW },
 ]
 
 const gestionItems: NavItem[] = [
-  { title: "Réservations", url: "/reservations", icon: Calendar },
-  { title: "Terrains", url: "/terrains", icon: MapPin },
-  { title: "Créneaux", url: "/creneaux", icon: Clock },
-  { title: "Joueurs", url: "/joueurs", icon: Users },
+  { title: "Réservations", url: "/reservations", icon: Calendar, permission: PERMISSIONS.RESERVATIONS_VIEW },
+  { title: "Courts", url: "/terrains", icon: MapPin, permission: PERMISSIONS.TERRAINS_VIEW },
+  { title: "Créneaux", url: "/creneaux", icon: Clock, permission: PERMISSIONS.CRENEAUX_VIEW },
+  { title: "Joueurs", url: "/joueurs", icon: Users, permission: PERMISSIONS.JOUEURS_VIEW },
   {
     title: "Produits",
     icon: Package,
     basePath: "/produits",
+    permission: PERMISSIONS.PRODUITS_VIEW,
     children: [
       { title: "Liste", url: "/produits", icon: List },
       { title: "Achats", url: "/produits/achats", icon: ShoppingCart },
@@ -68,10 +73,10 @@ const gestionItems: NavItem[] = [
 ]
 
 const adminItems: NavItem[] = [
-  { title: "Employés", url: "/employes", icon: UserCog },
-  { title: "Dépenses", url: "/depenses", icon: Wallet },
-  { title: "Statistiques", url: "/statistiques", icon: BarChart3 },
-  { title: "Paramètres", url: "/parametres", icon: Settings },
+  { title: "Employés", url: "/employes", icon: UserCog, permission: PERMISSIONS.EMPLOYES_VIEW },
+  { title: "Dépenses", url: "/depenses", icon: Wallet, permission: PERMISSIONS.DEPENSES_VIEW },
+  { title: "Statistiques", url: "/statistiques", icon: BarChart3, permission: PERMISSIONS.STATISTIQUES_VIEW },
+  { title: "Paramètres", url: "/parametres", icon: Settings, permission: PERMISSIONS.PARAMETRES_MANAGE },
 ]
 
 // ─── Nav Link Component ──────────────────────────────────────────────
@@ -159,13 +164,26 @@ function NavGroup({
 function NavSection({
   items,
   pathname,
+  can,
 }: {
   items: NavItem[]
   pathname: string
+  can: (p: string) => boolean
 }) {
+  const filtered = items.filter((item) => {
+    const perm = item.permission
+    if (!perm) return true
+    return can(perm)
+  })
+
+  // Legacy fallback: if all items are filtered out but items exist, show all (no permissions configured yet)
+  const visible = filtered.length === 0 && items.length > 0 ? items : filtered
+
+  if (visible.length === 0) return null
+
   return (
     <div className="space-y-0.5">
-      {items.map((item) =>
+      {visible.map((item) =>
         isGroup(item) ? (
           <NavGroup key={item.basePath} group={item} pathname={pathname} />
         ) : (
@@ -179,7 +197,7 @@ function NavSection({
 // ═════════════════════════════════════════════════════════════════════
 export function AppSidebar() {
   const pathname = usePathname()
-  const { employee, logout } = useAuth()
+  const { employee, logout, can } = useAuth()
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-neutral-950 flex flex-col">
@@ -196,23 +214,33 @@ export function AppSidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-6">
         {/* Main */}
-        <NavSection items={mainItems} pathname={pathname} />
+        <NavSection items={mainItems} pathname={pathname} can={can} />
 
         {/* Gestion */}
-        <div>
-          <p className="px-3 mb-2 text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">
-            Gestion
-          </p>
-          <NavSection items={gestionItems} pathname={pathname} />
-        </div>
+        {(() => {
+          const section = <NavSection items={gestionItems} pathname={pathname} can={can} />
+          return section ? (
+            <div>
+              <p className="px-3 mb-2 text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">
+                Gestion
+              </p>
+              {section}
+            </div>
+          ) : null
+        })()}
 
         {/* Administration */}
-        <div>
-          <p className="px-3 mb-2 text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">
-            Administration
-          </p>
-          <NavSection items={adminItems} pathname={pathname} />
-        </div>
+        {(() => {
+          const section = <NavSection items={adminItems} pathname={pathname} can={can} />
+          return section ? (
+            <div>
+              <p className="px-3 mb-2 text-[10px] font-semibold text-neutral-600 uppercase tracking-wider">
+                Administration
+              </p>
+              {section}
+            </div>
+          ) : null
+        })()}
       </nav>
 
       {/* User */}
@@ -227,7 +255,7 @@ export function AppSidebar() {
             <p className="text-sm font-medium text-white truncate">
               {employee?.full_name || employee?.username}
             </p>
-            <p className="text-xs text-neutral-500 capitalize">{employee?.role}</p>
+            <p className="text-xs text-neutral-500 capitalize">{employee?.profile_display_name || employee?.role}</p>
           </div>
           <button
             onClick={logout}

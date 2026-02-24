@@ -15,28 +15,28 @@ import {
   CreditCard,
   Smartphone,
   Receipt,
-  TrendingUp,
   Package,
   Search,
   Banknote,
-  Lock,
-  History,
   Pencil,
   ArrowLeft,
   RotateCcw,
-  Hash,
   ClipboardList,
   MapPin,
   Clock,
-  CalendarDays,
   Check,
   Printer,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Info,
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/components/providers/auth-provider"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import VirtualKeyboard, { useVirtualKeyboardEnabled } from "@/components/ui/virtual-keyboard"
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface PosCategory {
@@ -98,7 +98,7 @@ interface PosOrder {
   created_at: string
   table?: { name: string } | null
   terrain?: { code: string } | null
-  time_slot?: { start_time: string; end_time: string } | null
+  time_slot?: { start_time: string; end_time: string; price?: number } | null
 }
 
 interface Terrain {
@@ -129,9 +129,12 @@ interface ActiveReservation {
   time_slot_id: number
   reservation_date: string
   status: string
-  terrain?: { code: string }
-  time_slot?: { start_time: string; end_time: string }
-  client?: { full_name: string; phone: string } | null
+  user_id?: string
+  client_id?: string | null
+  terrain?: { id: number; code: string }
+  time_slot?: { id: number; start_time: string; end_time: string; price?: number }
+  user?: { id: string; first_name: string | null; last_name: string | null; email?: string; phone: string | null } | null
+  client?: { id: string; full_name: string; phone: string } | null
 }
 
 // ─── Icon Map ────────────────────────────────────────────────────────
@@ -145,6 +148,11 @@ const categoryIcons: Record<string, React.ReactNode> = {
 // ─── Helpers ─────────────────────────────────────────────────────────
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("fr-FR").format(amount) + " F"
+
+const translatePaymentMethod = (method: string): string => {
+  const map: Record<string, string> = { cash: "Espèces", card: "Carte", mobile_money: "Mobile", mobile: "Mobile" }
+  return map[method] || method || "—"
+}
 
 const generateOrderNumber = () => {
   const now = new Date()
@@ -162,6 +170,7 @@ const generateOrderNumber = () => {
 export default function CaissePage() {
   const { employee } = useAuth()
   const supabase = createClient()
+  const [vkEnabled] = useVirtualKeyboardEnabled()
 
   // Data
   const [categories, setCategories] = useState<PosCategory[]>([])
@@ -192,15 +201,25 @@ export default function CaissePage() {
   // Today's stats
   const [todayOrders, setTodayOrders] = useState<PosOrder[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [selectedTicket, setSelectedTicket] = useState<PosOrder | null>(null)
+  const [selectedTicketItems, setSelectedTicketItems] = useState<{ product_name: string; quantity: number; unit_price: number; total: number }[]>([])
+  const [ticketReservationPrice, setTicketReservationPrice] = useState(0)
+  const [selectedTicketPayments, setSelectedTicketPayments] = useState<{ method_name: string; amount: number; amount_received: number; amount_returned: number }[]>([])
+  const [sessionExpenses, setSessionExpenses] = useState<{ id: number; description: string; amount: number; category: string; created_at: string }[]>([])
+  const [showZReport, setShowZReport] = useState(false)
+  const [historyPage, setHistoryPage] = useState(0)
+  const [zReportDate, setZReportDate] = useState("")
+  const [zReportOrders, setZReportOrders] = useState<PosOrder[]>([])
+  const [zReportExpenses, setZReportExpenses] = useState<{ id: number; description: string; amount: number; category: string; created_at: string }[]>([])
+  const [zReportLoading, setZReportLoading] = useState(false)
 
   // Commander
   const [terrains, setTerrains] = useState<Terrain[]>([])
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [posTables, setPosTables] = useState<PosTable[]>([])
   const [activeReservations, setActiveReservations] = useState<ActiveReservation[]>([])
-  const [showCommandType, setShowCommandType] = useState(false)
-  const [showTablePlan, setShowTablePlan] = useState(false)
-  const [showTerrainPicker, setShowTerrainPicker] = useState(false)
+  const [showTablePicker, setShowTablePicker] = useState(false)
+  const [showTerrainModal, setShowTerrainModal] = useState(false)
   const [occupiedTableIds, setOccupiedTableIds] = useState<number[]>([])
 
   // Pending orders
@@ -228,6 +247,24 @@ export default function CaissePage() {
     stock_quantity: "",
   })
   const [isSavingProduct, setIsSavingProduct] = useState(false)
+
+  // Expenses
+  const [showExpenseModal, setShowExpenseModal] = useState(false)
+  const [expenseForm, setExpenseForm] = useState({ description: "", amount: "", beneficiaire: "", expense_type_id: "" })
+  const [isSavingExpense, setIsSavingExpense] = useState(false)
+  const [expenseTypes, setExpenseTypes] = useState<{ id: number; name: string; description: string | null }[]>([])
+
+  // Reservation modal
+  const [showReservationModal, setShowReservationModal] = useState(false)
+  const [resModalDate, setResModalDate] = useState(new Date().toISOString().split("T")[0])
+  const [resModalReservations, setResModalReservations] = useState<ActiveReservation[]>([])
+  const [resModalSelectedRes, setResModalSelectedRes] = useState<ActiveReservation | null>(null)
+  const [resModalQuickAdd, setResModalQuickAdd] = useState<{ terrainId: number; slotId: number } | null>(null)
+  const [resModalQuickAddForm, setResModalQuickAddForm] = useState({ name: "", phone: "" })
+  const [resModalLoading, setResModalLoading] = useState(false)
+
+  // All order payment details (order_id → [{method_name, amount}])
+  const [allOrderPayments, setAllOrderPayments] = useState<Record<number, { method_name: string; amount: number }[]>>({})
 
   // ─── Load Data ───────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -288,6 +325,14 @@ export default function CaissePage() {
         .order("display_order")
       setSysPaymentMethods(pmData || [])
 
+      // Load expense types
+      const { data: etData } = await supabase
+        .from("expense_types")
+        .select("id, name, description")
+        .eq("is_active", true)
+        .order("name")
+      setExpenseTypes(etData || [])
+
       setSessionChecked(true)
     } catch (error) {
       console.error(error)
@@ -302,7 +347,7 @@ export default function CaissePage() {
     const today = new Date().toISOString().split("T")[0]
     const { data } = await supabase
       .from("pos_orders")
-      .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time)")
+      .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)")
       .gte("created_at", `${today}T00:00:00`)
       .eq("status", "completed")
       .order("created_at", { ascending: false })
@@ -312,7 +357,7 @@ export default function CaissePage() {
   const loadPendingOrders = useCallback(async () => {
     const { data } = await supabase
       .from("pos_orders")
-      .select("*, table:pos_tables(name), terrain:terrains(code), time_slot:time_slots(start_time, end_time)")
+      .select("*, table:pos_tables(name), terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)")
       .eq("status", "pending")
       .order("created_at", { ascending: false })
     setPendingOrders(data || [])
@@ -320,6 +365,332 @@ export default function CaissePage() {
     const tIds = (data || []).filter((o: PosOrder) => o.table_id).map((o: PosOrder) => o.table_id as number)
     setOccupiedTableIds(tIds)
   }, [])
+
+  const loadAllOrderPayments = useCallback(async (orders: PosOrder[]) => {
+    const result: Record<number, { method_name: string; amount: number }[]> = {}
+    if (orders.length === 0) { setAllOrderPayments(result); return }
+
+    const orderIds = orders.map((o) => o.id)
+
+    // Try pos_order_payments first
+    const { data: opData } = await supabase
+      .from("pos_order_payments")
+      .select("order_id, amount, payment_method:payment_methods(name)")
+      .in("order_id", orderIds)
+
+    if (opData && opData.length > 0) {
+      for (const row of opData) {
+        const oid = row.order_id as number
+        if (!result[oid]) result[oid] = []
+        const pm = row.payment_method as unknown as { name: string } | null
+        result[oid].push({
+          method_name: pm?.name || "Inconnu",
+          amount: row.amount as number,
+        })
+      }
+    }
+
+    // For terrain orders without pos_order_payments data, try reservation_payments
+    const terrainOrders = orders.filter((o) => o.reservation_id && !result[o.id])
+    if (terrainOrders.length > 0) {
+      const resIds = terrainOrders.map((o) => o.reservation_id as number)
+      const { data: rpData } = await supabase
+        .from("reservation_payments")
+        .select("reservation_id, amount, payment_method:payment_methods(name)")
+        .in("reservation_id", resIds)
+
+      if (rpData && rpData.length > 0) {
+        // Map reservation_id back to order_id
+        const resIdToOrderId: Record<number, number> = {}
+        terrainOrders.forEach((o) => { if (o.reservation_id) resIdToOrderId[o.reservation_id] = o.id })
+
+        for (const row of rpData) {
+          const orderId = resIdToOrderId[row.reservation_id as number]
+          if (!orderId) continue
+          if (!result[orderId]) result[orderId] = []
+          const pm = row.payment_method as unknown as { name: string } | null
+          result[orderId].push({
+            method_name: pm?.name || "Inconnu",
+            amount: row.amount as number,
+          })
+        }
+      }
+    }
+
+    // For orders with no payment detail loaded, create entry from order.payment_method
+    for (const order of orders) {
+      if (!result[order.id]) {
+        const pmMap: Record<string, string> = { cash: "Espèces", card: "Carte", mobile_money: "Mobile", mobile: "Mobile" }
+        // For 'mixed' orders without detail, attribute to dominant method name from pmMap
+        const methodName = pmMap[order.payment_method] || order.payment_method || "Espèces"
+        result[order.id] = [{ method_name: methodName, amount: order.total }]
+      }
+    }
+
+    setAllOrderPayments(result)
+  }, [])
+
+  const loadSessionExpenses = useCallback(async () => {
+    if (!currentSession) return
+    const { data } = await supabase
+      .from("pos_expenses")
+      .select("*")
+      .eq("session_id", currentSession.id)
+      .order("created_at", { ascending: false })
+    setSessionExpenses(data || [])
+  }, [currentSession])
+
+  // ─── Z Report date navigation ─────────────────────────────────
+  const loadZReportForDate = useCallback(async (date: string) => {
+    setZReportLoading(true)
+    try {
+      const nextDay = new Date(date + "T12:00:00")
+      nextDay.setDate(nextDay.getDate() + 1)
+      const nextDayStr = nextDay.toISOString().split("T")[0]
+
+      const [ordRes, expRes] = await Promise.all([
+        supabase
+          .from("pos_orders")
+          .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)")
+          .gte("created_at", `${date}T00:00:00`)
+          .lt("created_at", `${nextDayStr}T00:00:00`)
+          .eq("status", "completed")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("pos_expenses")
+          .select("id, description, amount, category, created_at")
+          .gte("created_at", `${date}T00:00:00`)
+          .lt("created_at", `${nextDayStr}T00:00:00`)
+      ])
+      setZReportOrders(ordRes.data || [])
+      setZReportExpenses(expRes.data || [])
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setZReportLoading(false)
+    }
+  }, [])
+
+  // ─── Reservation Modal Functions ────────────────────────────────
+  const loadResModalReservations = useCallback(async (date: string) => {
+    setResModalLoading(true)
+    try {
+      const { data } = await supabase
+        .from("reservations")
+        .select(`
+          id, reservation_date, status, created_at, terrain_id, time_slot_id, user_id, client_id,
+          terrain:terrains(id, code),
+          time_slot:time_slots(id, start_time, end_time, price),
+          user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
+          client:clients(id, full_name, phone)
+        `)
+        .eq("reservation_date", date)
+        .neq("status", "CANCELED")
+      setResModalReservations((data || []) as unknown as ActiveReservation[])
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setResModalLoading(false)
+    }
+  }, [])
+
+  const getResPlayerName = (r: ActiveReservation) => {
+    if (r.client?.full_name) return r.client.full_name
+    if (r.user?.first_name && r.user?.last_name) return `${r.user.first_name} ${r.user.last_name}`
+    return r.user?.first_name || r.user?.last_name || "Client"
+  }
+
+  const getResPlayerPhone = (r: ActiveReservation): string | null => {
+    if (r.client?.phone) return r.client.phone
+    return r.user?.phone || null
+  }
+
+  const formatResPhone = (phone: string) => {
+    const cleaned = phone.replace(/\D/g, '')
+    return cleaned.replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+  }
+
+  const handleResModalStatusChange = async (resId: number, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from("reservations")
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq("id", resId)
+      if (error) throw error
+      toast.success(newStatus === "CANCELED" ? "Réservation annulée" : newStatus === "CONFIRMED" ? "Réservation confirmée" : "Statut mis à jour")
+      setResModalSelectedRes(null)
+      loadResModalReservations(resModalDate)
+    } catch (error) {
+      console.error(error)
+      toast.error("Erreur lors de la mise à jour")
+    }
+  }
+
+  const handleResModalQuickAdd = async () => {
+    if (!resModalQuickAdd) return
+    const phoneDigits = resModalQuickAddForm.phone.replace(/\D/g, "")
+    if (!resModalQuickAddForm.name.trim() || phoneDigits.length !== 10) return
+    if (!phoneDigits.startsWith("01") && !phoneDigits.startsWith("05") && !phoneDigits.startsWith("07")) {
+      toast.error("Le numéro doit commencer par 01, 05 ou 07")
+      return
+    }
+    try {
+      // Check availability
+      const { data: existing } = await supabase
+        .from("reservations")
+        .select("id")
+        .eq("terrain_id", resModalQuickAdd.terrainId)
+        .eq("time_slot_id", resModalQuickAdd.slotId)
+        .eq("reservation_date", resModalDate)
+        .neq("status", "CANCELED")
+        .limit(1)
+      if (existing && existing.length > 0) {
+        toast.error("Ce créneau vient d'être réservé")
+        setResModalQuickAdd(null)
+        loadResModalReservations(resModalDate)
+        return
+      }
+      // Get or create client
+      let clientId: string
+      const { data: existingClient } = await supabase.from("clients").select("id").eq("phone", phoneDigits).single()
+      if (existingClient) {
+        clientId = existingClient.id
+      } else {
+        const { data: newClient, error: clientErr } = await supabase
+          .from("clients")
+          .insert({ full_name: resModalQuickAddForm.name.trim(), phone: phoneDigits })
+          .select("id")
+          .single()
+        if (clientErr) throw clientErr
+        clientId = newClient.id
+      }
+      // Get manual reservation user id
+      const { data: settings } = await supabase.from("app_settings").select("manual_reservation_user_id").eq("id", 1).single()
+      const userId = settings?.manual_reservation_user_id || "fdf34d9a-5024-4f27-8e46-0f34151f7d7c"
+      // Create reservation
+      const { error } = await supabase.from("reservations").insert({
+        terrain_id: resModalQuickAdd.terrainId,
+        time_slot_id: resModalQuickAdd.slotId,
+        reservation_date: resModalDate,
+        user_id: userId,
+        client_id: clientId,
+        status: "CONFIRMED",
+      })
+      if (error) throw error
+      toast.success("Réservation créée")
+      setResModalQuickAdd(null)
+      setResModalQuickAddForm({ name: "", phone: "" })
+      loadResModalReservations(resModalDate)
+    } catch (error) {
+      console.error(error)
+      toast.error("Erreur lors de la réservation")
+    }
+  }
+
+  const openTicketDetail = async (order: PosOrder) => {
+    setSelectedTicket(order)
+    setSelectedTicketItems([])
+    setTicketReservationPrice(0)
+    setSelectedTicketPayments([])
+
+    const { data: items } = await supabase
+      .from("pos_order_items")
+      .select("product_name, quantity, unit_price, total")
+      .eq("order_id", order.id)
+    setSelectedTicketItems(items || [])
+
+    if (order.reservation_id) {
+      const { data: res } = await supabase
+        .from("reservations")
+        .select("time_slot:time_slots(price)")
+        .eq("id", order.reservation_id)
+        .single()
+      if (res?.time_slot) {
+        const slot = res.time_slot as unknown as { price: number }
+        setTicketReservationPrice(slot.price || 0)
+      }
+    }
+
+    // Load payment details
+    const { data: orderPmts } = await supabase
+      .from("pos_order_payments")
+      .select("payment_method_id, amount, amount_received, amount_returned, payment_method:payment_methods(name)")
+      .eq("order_id", order.id)
+    if (orderPmts && orderPmts.length > 0) {
+      setSelectedTicketPayments(orderPmts.map((p: Record<string, unknown>) => {
+        const pm = p.payment_method as unknown as { name: string } | null
+        return { method_name: pm?.name || "Inconnu", amount: p.amount as number, amount_received: p.amount_received as number, amount_returned: p.amount_returned as number }
+      }))
+    } else if (order.reservation_id) {
+      const { data: resPmts } = await supabase
+        .from("reservation_payments")
+        .select("payment_method_id, amount, amount_received, amount_returned, payment_method:payment_methods(name)")
+        .eq("reservation_id", order.reservation_id)
+      if (resPmts && resPmts.length > 0) {
+        setSelectedTicketPayments(resPmts.map((p: Record<string, unknown>) => {
+          const pm = p.payment_method as unknown as { name: string } | null
+          return { method_name: pm?.name || "Inconnu", amount: p.amount as number, amount_received: p.amount_received as number, amount_returned: p.amount_returned as number }
+        }))
+      }
+    }
+  }
+
+  const openTerrainInfoTicket = async (res: ActiveReservation) => {
+    // Look for an existing completed order linked to this reservation
+    const { data: orders } = await supabase
+      .from("pos_orders")
+      .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price), table:pos_tables(name)")
+      .eq("reservation_id", res.id)
+      .in("status", ["completed", "pending"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+
+    if (orders && orders.length > 0) {
+      openTicketDetail(orders[0] as PosOrder)
+    } else {
+      // No order exists — build a synthetic ticket with reservation info only
+      const slotPrice = res.time_slot?.price || 0
+      const syntheticOrder: PosOrder = {
+        id: 0,
+        order_number: "—",
+        total: 0,
+        status: "completed",
+        order_type: "terrain",
+        payment_method: "",
+        cash_received: null,
+        change_given: null,
+        employee_name: "",
+        table_id: null,
+        terrain_id: res.terrain_id,
+        time_slot_id: res.time_slot_id,
+        reservation_id: res.id,
+        reservation_date: res.reservation_date,
+        client_name: getResPlayerName(res),
+        client_phone: getResPlayerPhone(res),
+        created_at: new Date().toISOString(),
+        terrain: res.terrain ? { code: res.terrain.code } : null,
+        time_slot: res.time_slot ? { start_time: res.time_slot.start_time, end_time: res.time_slot.end_time, price: res.time_slot.price } : null,
+      }
+      setSelectedTicket(syntheticOrder)
+      setSelectedTicketItems([])
+      setTicketReservationPrice(slotPrice)
+      setSelectedTicketPayments([])
+
+      // If reservation is PAID, try to load reservation_payments
+      if (res.status === "PAID") {
+        const { data: resPmts } = await supabase
+          .from("reservation_payments")
+          .select("payment_method_id, amount, amount_received, amount_returned, payment_method:payment_methods(name)")
+          .eq("reservation_id", res.id)
+        if (resPmts && resPmts.length > 0) {
+          setSelectedTicketPayments(resPmts.map((p: Record<string, unknown>) => {
+            const pm = p.payment_method as unknown as { name: string } | null
+            return { method_name: pm?.name || "Inconnu", amount: p.amount as number, amount_received: p.amount_received as number, amount_returned: p.amount_returned as number }
+          }))
+        }
+      }
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -530,11 +901,17 @@ export default function CaissePage() {
     const today = new Date().toISOString().split("T")[0]
     const { data } = await supabase
       .from("reservations")
-      .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time), client:clients(full_name, phone)")
+      .select(`
+        id, reservation_date, status, created_at, terrain_id, time_slot_id, user_id, client_id,
+        terrain:terrains(id, code),
+        time_slot:time_slots(id, start_time, end_time, price),
+        user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
+        client:clients(id, full_name, phone)
+      `)
       .eq("reservation_date", today)
       .in("status", ["CONFIRMED", "PAID"])
       .order("time_slot_id")
-    setActiveReservations(data || [])
+    setActiveReservations((data || []) as unknown as ActiveReservation[])
   }
 
   // ─── Shared: decrement stock + log movements ───────────────────
@@ -675,7 +1052,7 @@ export default function CaissePage() {
     const existing = pendingOrders.find(
       (o) => o.order_type === "table" && o.table_id === table.id
     )
-    setShowTablePlan(false)
+    setShowTablePicker(false)
     if (existing) {
       await appendToPendingOrder(existing)
     } else {
@@ -690,7 +1067,11 @@ export default function CaissePage() {
   // ─── Commande Terrain ──────────────────────────────────────────
   const handleCommandeTerrain = async (res: ActiveReservation) => {
     if (res.status === "PAID") {
-      toast.error("Ce terrain est déjà payé, impossible de passer une commande")
+      toast.error("Ce court est déjà payé, impossible de passer une commande")
+      return
+    }
+    if (cart.length === 0) {
+      toast.error("Le panier est vide")
       return
     }
     // Check if this terrain+slot already has a pending order
@@ -700,7 +1081,7 @@ export default function CaissePage() {
         o.terrain_id === res.terrain_id &&
         o.time_slot_id === res.time_slot_id
     )
-    setShowTerrainPicker(false)
+    setShowTerrainModal(false)
     if (existing) {
       await appendToPendingOrder(existing)
     } else {
@@ -710,10 +1091,68 @@ export default function CaissePage() {
         time_slot_id: res.time_slot_id,
         reservation_id: res.id,
         reservation_date: res.reservation_date,
-        client_name: res.client?.full_name || null,
-        client_phone: res.client?.phone || null,
+        client_name: getResPlayerName(res),
+        client_phone: getResPlayerPhone(res),
       })
-      if (num) toast.success(`Commande ${num} — ${res.terrain?.code} ${res.client?.full_name || ""}`)
+      if (num) toast.success(`Commande ${num} — ${res.terrain?.code} ${getResPlayerName(res)}`)
+    }
+  }
+
+  // ─── Encaisser Terrain (with or without products) ─────────────
+  const handleEncaisserTerrain = async (res: ActiveReservation) => {
+    if (res.status === "PAID") {
+      toast.error("Cette réservation est déjà payée")
+      return
+    }
+    setShowTerrainModal(false)
+
+    // Check if there's already a pending order for this terrain+slot
+    const existing = pendingOrders.find(
+      (o) =>
+        o.order_type === "terrain" &&
+        o.terrain_id === res.terrain_id &&
+        o.time_slot_id === res.time_slot_id
+    )
+
+    if (existing) {
+      // Open pay modal for existing order
+      await openPayModal(existing)
+    } else {
+      // Create a minimal pending order (0 products) just to hold reservation info
+      if (!currentSession) return
+      setIsProcessing(true)
+      try {
+        const orderNumber = generateOrderNumber()
+        const { data: order, error: orderError } = await supabase
+          .from("pos_orders")
+          .insert({
+            order_number: orderNumber,
+            session_id: currentSession.id,
+            total: 0,
+            status: "pending",
+            payment_method: "cash",
+            employee_name: employee?.full_name || employee?.username || "Employé",
+            order_type: "terrain",
+            terrain_id: res.terrain_id,
+            time_slot_id: res.time_slot_id,
+            reservation_id: res.id,
+            reservation_date: res.reservation_date,
+            client_name: getResPlayerName(res),
+            client_phone: getResPlayerPhone(res),
+          })
+          .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price), table:pos_tables(name)")
+          .single()
+
+        if (orderError) throw orderError
+
+        await loadPendingOrders()
+        await openPayModal(order as PosOrder)
+      } catch (error) {
+        console.error(error)
+        toast.error("Erreur lors de la création de la commande")
+      } finally {
+        setIsProcessing(false)
+      }
     }
   }
 
@@ -820,6 +1259,18 @@ export default function CaissePage() {
         .eq("id", payingOrder.id)
 
       if (error) throw error
+
+      // Save payment details to pos_order_payments
+      for (const payment of orderPayments) {
+        const { error: popErr } = await supabase.from("pos_order_payments").insert({
+          order_id: payingOrder.id,
+          payment_method_id: payment.payment_method_id,
+          amount: payment.amount,
+          amount_received: payment.amount_received,
+          amount_returned: payment.amount_returned,
+        })
+        if (popErr) console.warn("pos_order_payments insert:", popErr)
+      }
 
       // Settle linked reservation if requested
       const shouldSettleReservation = payingOrder.order_type === "terrain" && payingOrder.reservation_id !== null && reservationPrice > 0
@@ -975,6 +1426,35 @@ export default function CaissePage() {
     }
   }
 
+  // ─── Save Expense ──────────────────────────────────────────────
+  const handleSaveExpense = async () => {
+    if (!expenseForm.description || !expenseForm.amount || parseFloat(expenseForm.amount) <= 0) {
+      toast.error("Description et montant sont obligatoires")
+      return
+    }
+    if (!currentSession) return
+    setIsSavingExpense(true)
+    try {
+      const { error } = await supabase.from("pos_expenses").insert({
+        session_id: currentSession.id,
+        description: expenseForm.description,
+        amount: parseFloat(expenseForm.amount),
+        beneficiaire: expenseForm.beneficiaire || null,
+        expense_type_id: expenseForm.expense_type_id ? parseInt(expenseForm.expense_type_id) : null,
+        employee_name: employee?.full_name || employee?.username || "Employé",
+      })
+      if (error) throw error
+      setShowExpenseModal(false)
+      setExpenseForm({ description: "", amount: "", beneficiaire: "", expense_type_id: "" })
+      toast.success("Dépense enregistrée")
+    } catch (error) {
+      console.error(error)
+      toast.error("Erreur lors de l'enregistrement de la dépense")
+    } finally {
+      setIsSavingExpense(false)
+    }
+  }
+
   // ─── Filtered Products ──────────────────────────────────────────
   const filteredProducts = products.filter((p) => {
     if (selectedCategory && p.category_id !== selectedCategory) return false
@@ -984,10 +1464,38 @@ export default function CaissePage() {
   })
 
   // ─── Today Stats ────────────────────────────────────────────────
-  const todayTotal = todayOrders.reduce((sum, o) => sum + o.total, 0)
+  // Helper: get terrain slot price from an order's joined time_slot
+  const getOrderSlotPrice = (o: PosOrder) => {
+    if (o.order_type !== "terrain" || !o.time_slot) return 0
+    return (o.time_slot as { start_time: string; end_time: string; price?: number }).price || 0
+  }
+  // Helper: full total for an order (cart products + terrain fee if applicable)
+  const getOrderFullTotal = (o: PosOrder) => o.total + getOrderSlotPrice(o)
+
+  const todayCaisseTotal = todayOrders.reduce((sum, o) => sum + o.total, 0)
+  const todayTerrainTotal = todayOrders
+    .filter((o) => o.order_type === "terrain")
+    .reduce((sum, o) => sum + getOrderSlotPrice(o), 0)
+  const todayExpensesTotal = sessionExpenses.reduce((sum, e) => sum + e.amount, 0)
+  const todayTotal = todayTerrainTotal + todayCaisseTotal - todayExpensesTotal
   const todayCash = todayOrders
     .filter((o) => o.payment_method === "cash")
     .reduce((sum, o) => sum + o.total, 0)
+
+  // Real payment breakdown from loaded per-order payment details
+  const realPaymentBreakdown = Object.values(allOrderPayments).flat().reduce((acc, p) => {
+    acc[p.method_name] = (acc[p.method_name] || 0) + p.amount
+    return acc
+  }, {} as Record<string, number>)
+  // Fallback: simple breakdown from order.payment_method if no detail loaded
+  const paymentBreakdown = Object.keys(realPaymentBreakdown).length > 0
+    ? realPaymentBreakdown
+    : todayOrders.reduce((acc, o) => {
+        // Never show 'mixed' as a category — use translatePaymentMethod which maps to real names
+        const method = o.payment_method === "mixed" ? "Espèces" : translatePaymentMethod(o.payment_method)
+        acc[method] = (acc[method] || 0) + o.total
+        return acc
+      }, {} as Record<string, number>)
 
   // ─── Loading ────────────────────────────────────────────────────
   if (isLoading || !sessionChecked) {
@@ -1102,17 +1610,17 @@ export default function CaissePage() {
       {/* ─── MAIN AREA: Cart Left + Products Right ──────────────────── */}
       <div className="flex-1 flex overflow-hidden">
         {/* ═══ LEFT: CART / TICKET ═══════════════════════════════════ */}
-        <div className="w-[380px] bg-white flex flex-col border-r border-neutral-200">
+        <div className="w-[380px] bg-neutral-900 flex flex-col border-r border-neutral-800">
           {/* Cart header */}
-          <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50">
+          <div className="px-5 py-3 border-b border-neutral-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Receipt className="h-4 w-4 text-neutral-500" />
-                <span className="text-sm font-semibold text-neutral-950">
+                <Receipt className="h-4 w-4 text-neutral-400" />
+                <span className="text-sm font-semibold text-white">
                   Ticket en cours
                 </span>
                 {cartItemCount > 0 && (
-                  <span className="ml-1 px-2 py-0.5 text-[10px] font-bold bg-neutral-900 text-white rounded-full">
+                  <span className="ml-1 px-2 py-0.5 text-[10px] font-bold bg-white text-neutral-900 rounded-full">
                     {cartItemCount}
                   </span>
                 )}
@@ -1120,7 +1628,7 @@ export default function CaissePage() {
               {cart.length > 0 && (
                 <button
                   onClick={() => setCart([])}
-                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors"
+                  className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors"
                 >
                   <RotateCcw className="h-3 w-3" />
                   Vider
@@ -1132,59 +1640,59 @@ export default function CaissePage() {
           {/* Cart items */}
           <div className="flex-1 overflow-y-auto">
             {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-neutral-300 px-6">
-                <ShoppingBag className="h-12 w-12 mb-3 stroke-1" />
-                <p className="text-sm text-neutral-400 font-medium">Panier vide</p>
-                <p className="text-xs text-neutral-300 mt-1 text-center">
+              <div className="flex flex-col items-center justify-center h-full px-6">
+                <ShoppingBag className="h-10 w-10 mb-2 stroke-1 text-neutral-600" />
+                <p className="text-sm text-neutral-500 font-medium">Panier vide</p>
+                <p className="text-xs text-neutral-600 mt-1 text-center">
                   Sélectionnez des produits à droite
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-neutral-100">
+              <div className="divide-y divide-neutral-800">
                 {cart.map((item, idx) => (
                   <div
                     key={item.product.id}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 hover:bg-neutral-800/50 transition-colors"
                   >
                     {/* Line number */}
-                    <span className="text-xs text-neutral-300 w-4 text-right font-mono">
+                    <span className="text-[10px] text-neutral-600 w-4 text-right font-mono">
                       {idx + 1}
                     </span>
                     {/* Product info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-neutral-900 truncate">
+                      <p className="text-sm font-medium text-white leading-tight">
                         {item.product.name}
                       </p>
-                      <p className="text-xs text-neutral-400">
+                      <p className="text-[11px] text-neutral-400">
                         {formatCurrency(item.product.price_ttc)}
                       </p>
                     </div>
                     {/* Quantity */}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       <button
                         onClick={() => updateQuantity(item.product.id, -1)}
-                        className="h-7 w-7 flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 hover:bg-neutral-200 transition-colors"
+                        className="h-6 w-6 flex items-center justify-center rounded-md bg-neutral-800 text-neutral-400 hover:bg-neutral-700 transition-colors"
                       >
                         <Minus className="h-3 w-3" />
                       </button>
-                      <span className="w-8 text-center text-sm font-semibold text-neutral-900">
+                      <span className="w-7 text-center text-sm font-bold text-white">
                         {item.quantity}
                       </span>
                       <button
                         onClick={() => updateQuantity(item.product.id, 1)}
-                        className="h-7 w-7 flex items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 hover:bg-neutral-200 transition-colors"
+                        className="h-6 w-6 flex items-center justify-center rounded-md bg-neutral-800 text-neutral-400 hover:bg-neutral-700 transition-colors"
                       >
                         <Plus className="h-3 w-3" />
                       </button>
                     </div>
                     {/* Subtotal */}
-                    <span className="text-sm font-semibold text-neutral-900 w-20 text-right">
+                    <span className="text-sm font-bold text-white w-20 text-right">
                       {formatCurrency(item.product.price_ttc * item.quantity)}
                     </span>
                     {/* Remove */}
                     <button
                       onClick={() => removeFromCart(item.product.id)}
-                      className="p-1.5 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      className="p-1 text-neutral-600 hover:text-red-400 hover:bg-red-950/30 rounded-md transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -1194,54 +1702,56 @@ export default function CaissePage() {
             )}
           </div>
 
-          {/* Cart total + pay button */}
-          <div className="border-t border-neutral-200 bg-white">
+          {/* Cart total + action buttons */}
+          <div className="border-t border-neutral-800 bg-neutral-900">
             {cart.length > 0 && (
-              <>
-                <div className="px-5 py-4 flex items-center justify-between">
-                  <span className="text-lg font-bold text-neutral-950">Total</span>
-                  <span className="text-2xl font-bold text-neutral-950">
-                    {formatCurrency(cartTotal)}
-                  </span>
-                </div>
-                <div className="px-5 pb-4 flex gap-2">
-                  <button
-                    onClick={() => setShowCommandType(true)}
-                    className="flex-1 py-3.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <ClipboardList className="h-4 w-4" />
-                    Commander
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowCheckout(true)
-                      setCashReceived("")
-                      setPaymentMethod("cash")
-                    }}
-                    className="flex-1 py-3.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Banknote className="h-4 w-4" />
-                    Encaisser
-                  </button>
-                </div>
-              </>
+              <div className="px-4 py-3 flex items-center justify-between">
+                <span className="text-base font-bold text-neutral-300">Total</span>
+                <span className="text-2xl font-bold text-white">
+                  {formatCurrency(cartTotal)}
+                </span>
+              </div>
             )}
+            <div className="px-4 pb-3 flex gap-2">
+              <button
+                onClick={() => {
+                  loadPendingOrders()
+                  setShowTablePicker(true)
+                }}
+                disabled={posTables.length === 0}
+                className="flex-1 py-3.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ClipboardList className="h-4 w-4" />
+                Table
+              </button>
+              <button
+                onClick={() => {
+                  loadActiveReservations()
+                  loadPendingOrders()
+                  setShowTerrainModal(true)
+                }}
+                className="flex-1 py-3.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <MapPin className="h-4 w-4" />
+                Terrain
+              </button>
+            </div>
           </div>
         </div>
 
         {/* ═══ RIGHT: PRODUCTS ═══════════════════════════════════════ */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden bg-stone-100">
           {/* Search + categories */}
-          <div className="px-6 py-3 bg-white border-b border-neutral-200">
+          <div className="px-6 py-3 bg-white border-b border-stone-200">
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <input
                   type="text"
                   placeholder="Rechercher un produit..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 text-sm border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 bg-neutral-50"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 bg-stone-50 text-neutral-900 placeholder:text-stone-400"
                 />
               </div>
             </div>
@@ -1252,7 +1762,7 @@ export default function CaissePage() {
                   "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all",
                   !selectedCategory
                     ? "bg-neutral-900 text-white shadow-sm"
-                    : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                    : "bg-stone-100 text-stone-500 hover:bg-stone-200"
                 )}
               >
                 <Package className="h-3.5 w-3.5" />
@@ -1274,7 +1784,7 @@ export default function CaissePage() {
                       "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all",
                       selectedCategory === cat.id
                         ? "bg-neutral-900 text-white shadow-sm"
-                        : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                        : "bg-stone-100 text-stone-500 hover:bg-stone-200"
                     )}
                   >
                     {cat.icon && categoryIcons[cat.icon]}
@@ -1288,7 +1798,7 @@ export default function CaissePage() {
           {/* Product grid */}
           <div className="flex-1 overflow-y-auto p-6">
             {filteredProducts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-neutral-400">
+              <div className="flex flex-col items-center justify-center h-full text-stone-400">
                 <Package className="h-12 w-12 mb-3 stroke-1" />
                 <p className="text-sm">Aucun produit trouvé</p>
               </div>
@@ -1307,7 +1817,7 @@ export default function CaissePage() {
                         "relative flex flex-col p-4 rounded-xl border transition-all text-left group active:scale-[0.97]",
                         inCart
                           ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500"
-                          : "border-neutral-200 bg-white hover:border-neutral-300 hover:shadow-md"
+                          : "border-stone-200 bg-white hover:border-stone-300 hover:shadow-md"
                       )}
                     >
                       {inCart && (
@@ -1315,10 +1825,10 @@ export default function CaissePage() {
                           {inCart.quantity}
                         </span>
                       )}
-                      <span className="text-sm font-medium text-neutral-950 mb-1 leading-tight">
+                      <span className="text-sm font-medium text-neutral-900 mb-1 leading-tight">
                         {product.name}
                       </span>
-                      <span className="text-[11px] text-neutral-400 mb-3">
+                      <span className="text-[11px] text-stone-400 mb-3">
                         {category?.name || "Sans catégorie"}
                       </span>
                       <div className="flex items-center justify-between w-full mt-auto">
@@ -1338,7 +1848,7 @@ export default function CaissePage() {
                               openProductModal("edit", product)
                             }
                           }}
-                          className="p-1 text-neutral-300 hover:text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          className="p-1 text-stone-300 hover:text-stone-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                         >
                           <Pencil className="h-3 w-3" />
                         </div>
@@ -1367,81 +1877,81 @@ export default function CaissePage() {
         </div>
       </div>
 
-      {/* ─── BOTTOM BAR: Options ────────────────────────────────────── */}
-      <div className="h-14 bg-neutral-900 flex items-center justify-between px-5 gap-3">
-        {/* Left options */}
-        <div className="flex items-center gap-2">
+      {/* ─── BOTTOM BAR ──────────────────────────────────────────────── */}
+      <div className="h-[48px] bg-neutral-900 flex items-center justify-between px-3 border-t border-neutral-800">
+        {/* Left: Back-office + Dépenses + Commandes + Historique */}
+        <div className="flex items-center gap-1">
           <Link
             href="/"
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-neutral-500 hover:text-neutral-300 transition-colors"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back-office
+            ← Back-office
           </Link>
-          <div className="w-px h-5 bg-neutral-700" />
+          <div className="w-px h-4 bg-neutral-700" />
           <button
-            onClick={() => openProductModal("create")}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+            onClick={() => {
+              setExpenseForm({ description: "", amount: "", beneficiaire: "", expense_type_id: "" })
+              setShowExpenseModal(true)
+            }}
+            className="px-3 py-1.5 text-xs font-semibold text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors"
           >
-            <Plus className="h-3.5 w-3.5" />
-            Nouveau produit
+            Dépenses
           </button>
-        </div>
-
-        {/* Center: session info */}
-        <div className="flex items-center gap-3 text-xs text-neutral-500">
-          <span className="flex items-center gap-1.5">
-            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            {employee?.full_name || employee?.username}
-          </span>
-          <span>•</span>
-          <span>Fond: {formatCurrency(currentSession.opening_amount)}</span>
-          <span>•</span>
-          <span className="text-emerald-400 font-medium">
-            {todayOrders.length} ticket{todayOrders.length > 1 ? "s" : ""} — {formatCurrency(todayTotal)}
-          </span>
-        </div>
-
-        {/* Right options */}
-        <div className="flex items-center gap-2">
           <button
             onClick={() => {
               loadPendingOrders()
               setShowPending(true)
             }}
-            className="relative flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 rounded-lg transition-colors"
+            className="relative px-3 py-1.5 text-xs font-semibold text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors"
           >
-            <ClipboardList className="h-3.5 w-3.5" />
             Commandes
             {pendingOrders.length > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 flex items-center justify-center text-[10px] font-bold text-white bg-blue-500 rounded-full">
+              <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] px-1 flex items-center justify-center text-[10px] font-bold text-white bg-blue-500 rounded-full">
                 {pendingOrders.length}
               </span>
             )}
           </button>
-          <div className="w-px h-5 bg-neutral-700" />
           <button
             onClick={() => {
-              loadTodayOrders()
+              const d = new Date().toISOString().split("T")[0]
+              setResModalDate(d)
+              loadResModalReservations(d)
+              setShowReservationModal(true)
+            }}
+            className="px-3 py-1.5 text-xs font-semibold text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors"
+          >
+            Réservation
+          </button>
+          <button
+            onClick={async () => {
+              await loadTodayOrders()
+              const today = new Date().toISOString().split("T")[0]
+              const { data: ord } = await supabase.from("pos_orders").select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)").gte("created_at", `${today}T00:00:00`).eq("status", "completed").order("created_at", { ascending: false })
+              loadAllOrderPayments(ord || [])
+              loadSessionExpenses()
+              setHistoryPage(0)
               setShowHistory(true)
             }}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+            className="px-3 py-1.5 text-xs font-semibold text-white border border-neutral-600 rounded-lg hover:bg-neutral-800 transition-colors"
           >
-            <History className="h-3.5 w-3.5" />
             Historique
           </button>
-          <div className="w-px h-5 bg-neutral-700" />
-          <button
-            onClick={() => {
-              loadTodayOrders()
-              setShowCloseSession(true)
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition-colors"
-          >
-            <Lock className="h-3.5 w-3.5" />
-            Fermer la caisse
-          </button>
         </div>
+
+        {/* Right: Fermer caisse */}
+        <button
+          onClick={async () => {
+            await loadTodayOrders()
+            const today = new Date().toISOString().split("T")[0]
+            const { data: ord } = await supabase.from("pos_orders").select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)").gte("created_at", `${today}T00:00:00`).eq("status", "completed").order("created_at", { ascending: false })
+            loadAllOrderPayments(ord || [])
+            loadSessionExpenses()
+            setShowCloseSession(true)
+          }}
+          className="px-4 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+        >
+          Fermer caisse
+        </button>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════ */}
@@ -1589,277 +2099,239 @@ export default function CaissePage() {
         </div>
       )}
 
-      {/* ─── Command Type Picker ─────────────────────────────────────── */}
-      {showCommandType && (
+      {/* ─── Table Picker Modal ──────────────────────────────────────── */}
+      {showTablePicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-neutral-950">
-                Type de commande
-              </h2>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-neutral-950">Choisir une table</h2>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  {cart.length} article{cart.length > 1 ? "s" : ""} — <span className="font-semibold text-blue-600">{formatCurrency(cartTotal)}</span>
+                </p>
+              </div>
               <button
-                onClick={() => setShowCommandType(false)}
+                onClick={() => setShowTablePicker(false)}
                 className="p-2 hover:bg-neutral-100 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-
-            <div className="text-center py-2 mb-5 bg-blue-50 rounded-xl">
-              <p className="text-xs text-blue-600 mb-0.5 uppercase tracking-wide">Total</p>
-              <p className="text-2xl font-bold text-blue-700">{formatCurrency(cartTotal)}</p>
-              <p className="text-xs text-blue-500">{cart.length} article{cart.length > 1 ? "s" : ""}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => {
-                  setShowCommandType(false)
-                  loadPendingOrders()
-                  setShowTablePlan(true)
-                }}
-                disabled={posTables.length === 0}
-                className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-neutral-200 hover:border-blue-500 hover:bg-blue-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <div className="h-14 w-14 rounded-full bg-blue-100 flex items-center justify-center">
-                  <ClipboardList className="h-6 w-6 text-blue-600" />
+            <div className="flex-1 overflow-y-auto p-6">
+              {posTables.length === 0 ? (
+                <div className="text-center py-12 text-neutral-400">
+                  <ClipboardList className="w-12 h-12 mx-auto mb-3 stroke-1" />
+                  <p className="text-sm font-medium">Aucune table configurée</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-neutral-950">Table</p>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    {posTables.length === 0 ? "Aucune table" : `${posTables.length} table${posTables.length > 1 ? "s" : ""}`}
-                  </p>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {posTables.map((table) => {
+                    const isOccupied = occupiedTableIds.includes(table.id)
+                    const existingOrder = pendingOrders.find(
+                      (o) => o.order_type === "table" && o.table_id === table.id
+                    )
+                    return (
+                      <button
+                        key={table.id}
+                        onClick={() => handleCommandeTable(table)}
+                        disabled={isProcessing}
+                        className={cn(
+                          "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                          isOccupied
+                            ? "border-orange-300 bg-orange-50 hover:border-orange-400 hover:shadow-md"
+                            : "border-neutral-200 hover:border-blue-500 hover:bg-blue-50 hover:shadow-md"
+                        )}
+                      >
+                        <div className={cn(
+                          "h-14 w-14 rounded-lg border-2 flex items-center justify-center",
+                          table.shape === "round" && "rounded-full",
+                          table.shape === "rectangle" && "h-10 w-20",
+                          isOccupied
+                            ? "bg-orange-100 border-orange-300"
+                            : "bg-neutral-100 border-neutral-300"
+                        )}>
+                          <span className="text-sm font-bold text-neutral-700">{table.name}</span>
+                        </div>
+                        <span className={cn(
+                          "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                          isOccupied
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        )}>
+                          {isOccupied ? "Occupée" : "Libre"}
+                        </span>
+                        {existingOrder && (
+                          <span className="text-[10px] font-bold text-blue-600">{formatCurrency(existingOrder.total)}</span>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowCommandType(false)
-                  loadActiveReservations()
-                  setShowTerrainPicker(true)
-                }}
-                className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-neutral-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all"
-              >
-                <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <MapPin className="h-6 w-6 text-emerald-600" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-neutral-950">Terrain</p>
-                  <p className="text-xs text-neutral-500 mt-0.5">Créneau actif</p>
-                </div>
-              </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── Table Plan Modal ──────────────────────────────────────────── */}
-      {showTablePlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-semibold text-neutral-950">Plan de salle</h2>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  Sélectionnez une table disponible — {formatCurrency(cartTotal)}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowTablePlan(false)}
-                className="p-2 hover:bg-neutral-100 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* ─── Terrain Modal (Large Grid — Reservation-page style) ─────── */}
+      {showTerrainModal && (() => {
+        const activeTerrains = terrains.filter((t) => t.is_active)
+        const reservationSlotIds = [...new Set(activeReservations.map((r) => r.time_slot_id))]
+        const relevantSlots = timeSlots
+          .filter((s) => reservationSlotIds.includes(s.id))
+          .sort((a, b) => a.start_time.localeCompare(b.start_time))
+        const getRes = (terrainId: number, slotId: number) =>
+          activeReservations.find((r) => r.terrain_id === terrainId && r.time_slot_id === slotId)
 
-            {posTables.length === 0 ? (
-              <div className="text-center py-12 text-neutral-400">
-                <ClipboardList className="w-10 h-10 mx-auto mb-2 stroke-1" />
-                <p className="text-sm">Aucune table configurée</p>
-                <p className="text-xs mt-1">Allez dans Paramètres &gt; Plan de salle pour ajouter des tables</p>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] mx-4 max-h-[94vh] flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="px-6 py-3 border-b border-neutral-200 flex items-center justify-between flex-shrink-0 bg-white">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-lg font-bold text-neutral-950">Terrains</h2>
+                  <span className="text-sm text-neutral-500">
+                    {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+                  </span>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600">
+                    {activeReservations.length} réservation{activeReservations.length > 1 ? "s" : ""}
+                  </span>
+                  {cart.length > 0 && (
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
+                      Panier: {cart.length} article{cart.length > 1 ? "s" : ""} · {formatCurrency(cartTotal)}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => setShowTerrainModal(false)} className="p-2 hover:bg-neutral-100 rounded-lg">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-            ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-                {posTables.map((table) => {
-                  const isOccupied = occupiedTableIds.includes(table.id)
-                  return (
-                    <button
-                      key={table.id}
-                      onClick={() => !isOccupied && handleCommandeTable(table)}
-                      disabled={isOccupied || isProcessing}
-                      className={cn(
-                        "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
-                        isOccupied
-                          ? "border-red-200 bg-red-50 cursor-not-allowed opacity-60"
-                          : "border-neutral-200 hover:border-blue-500 hover:bg-blue-50 hover:shadow-md"
-                      )}
-                    >
-                      {table.shape === "round" ? (
-                        <div className={cn(
-                          "h-16 w-16 rounded-full border-2 flex items-center justify-center transition-colors",
-                          isOccupied
-                            ? "bg-red-100 border-red-300"
-                            : "bg-neutral-100 border-neutral-300"
-                        )}>
-                          <span className="text-sm font-bold text-neutral-700">{table.name}</span>
-                        </div>
-                      ) : table.shape === "rectangle" ? (
-                        <div className={cn(
-                          "h-12 w-24 rounded-lg border-2 flex items-center justify-center transition-colors",
-                          isOccupied
-                            ? "bg-red-100 border-red-300"
-                            : "bg-neutral-100 border-neutral-300"
-                        )}>
-                          <span className="text-sm font-bold text-neutral-700">{table.name}</span>
-                        </div>
-                      ) : (
-                        <div className={cn(
-                          "h-16 w-16 rounded-lg border-2 flex items-center justify-center transition-colors",
-                          isOccupied
-                            ? "bg-red-100 border-red-300"
-                            : "bg-neutral-100 border-neutral-300"
-                        )}>
-                          <span className="text-sm font-bold text-neutral-700">{table.name}</span>
-                        </div>
-                      )}
-                      <span className={cn(
-                        "text-[10px] font-medium px-2 py-0.5 rounded-full",
-                        isOccupied
-                          ? "bg-red-100 text-red-600"
-                          : "bg-emerald-100 text-emerald-700"
-                      )}>
-                        {isOccupied ? "Occupée" : "Disponible"}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* ─── Terrain Picker Modal (Grid: terrains × créneaux) ────────── */}
-      {showTerrainPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl mx-4 p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-semibold text-neutral-950">Commande terrain</h2>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  Sélectionnez un créneau actif — {formatCurrency(cartTotal)}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowTerrainPicker(false)}
-                className="p-2 hover:bg-neutral-100 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {activeReservations.length === 0 ? (
-              <div className="text-center py-16 text-neutral-400">
-                <MapPin className="w-12 h-12 mx-auto mb-3 stroke-1" />
-                <p className="text-sm font-medium">Aucune réservation active aujourd&apos;hui</p>
-                <p className="text-xs mt-1">Les réservations confirmées ou payées apparaîtront ici</p>
-              </div>
-            ) : (() => {
-              // Build grid: unique time slots as rows, terrains as columns
-              const activeTerrains = terrains.filter((t) => t.is_active)
-              const slotIds = [...new Set(activeReservations.map((r) => r.time_slot_id))]
-              const uniqueSlots = slotIds
-                .map((sid) => {
-                  const r = activeReservations.find((r) => r.time_slot_id === sid)
-                  return r?.time_slot ? { id: sid, start: r.time_slot.start_time, end: r.time_slot.end_time } : null
-                })
-                .filter(Boolean) as { id: number; start: string; end: string }[]
-              uniqueSlots.sort((a, b) => a.start.localeCompare(b.start))
-
-              return (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
+              {/* Grid */}
+              <div className="flex-1 overflow-auto bg-gray-100">
+                {activeTerrains.length === 0 || relevantSlots.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-24 text-neutral-400">
+                    <MapPin className="w-14 h-14 mb-4 stroke-1" />
+                    <p className="text-base font-medium">Aucune réservation active aujourd&apos;hui</p>
+                    <p className="text-sm mt-1">Les réservations confirmées apparaîtront ici</p>
+                  </div>
+                ) : (
+                  <table className="w-full table-fixed border-collapse bg-white">
+                    <colgroup>
+                      <col className="w-20" />
+                      {activeTerrains.map((t) => <col key={t.id} />)}
+                    </colgroup>
+                    <thead className="sticky top-0 z-20">
                       <tr>
-                        <th className="p-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider w-28">
-                          <Clock className="inline h-3.5 w-3.5 mr-1" />
-                          Créneau
+                        <th className="border-b border-r border-gray-700 bg-gray-900 py-3 px-2">
+                          <span className="text-xs font-medium text-gray-400">Heure</span>
                         </th>
                         {activeTerrains.map((t) => (
-                          <th key={t.id} className="p-2 text-center">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 rounded-lg">
-                              <MapPin className="h-3.5 w-3.5 text-neutral-600" />
-                              <span className="text-sm font-bold text-neutral-800">Terrain {t.code}</span>
-                            </div>
+                          <th key={t.id} className="border-b border-r border-gray-700 py-3 bg-gray-900 last:border-r-0">
+                            <span className="text-sm font-semibold text-white">Terrain {t.code}</span>
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {uniqueSlots.map((slot) => (
-                        <tr key={slot.id} className="border-t border-neutral-100">
-                          <td className="p-2 align-middle">
-                            <span className="text-sm font-mono font-semibold text-neutral-700">
-                              {slot.start.slice(0, 5)}
-                            </span>
-                            <span className="text-xs text-neutral-400 ml-1">
-                              – {slot.end.slice(0, 5)}
-                            </span>
+                      {relevantSlots.map((slot, slotIdx) => (
+                        <tr key={slot.id} className={slotIdx % 2 === 1 ? "bg-gray-50" : "bg-white"}>
+                          {/* Time column */}
+                          <td className="border-b border-r border-gray-300 py-3 px-3 align-middle">
+                            <div className="text-base font-bold text-gray-900">{slot.start_time.slice(0, 5)}</div>
+                            <div className="text-sm text-gray-400">{slot.end_time.slice(0, 5)}</div>
+                            <div className="text-xs font-semibold text-emerald-600 mt-0.5">{formatCurrency(slot.price)}</div>
                           </td>
+
+                          {/* Terrain cells */}
                           {activeTerrains.map((t) => {
-                            const res = activeReservations.find(
-                              (r) => r.terrain_id === t.id && r.time_slot_id === slot.id
-                            )
-                            const existingOrder = pendingOrders.find(
-                              (o) => o.order_type === "terrain" && o.terrain_id === t.id && o.time_slot_id === slot.id
-                            )
+                            const res = getRes(t.id, slot.id)
                             if (!res) {
                               return (
-                                <td key={t.id} className="p-2 text-center align-middle">
-                                  <div className="h-16 flex items-center justify-center text-neutral-300 text-xs">
-                                    —
+                                <td key={t.id} className="border-b border-r border-gray-200 p-0 last:border-r-0" style={{ height: 130 }}>
+                                  <div className="h-full w-full flex items-center justify-center text-gray-200">
+                                    <span className="text-2xl font-light">—</span>
                                   </div>
                                 </td>
                               )
                             }
+
+                            const isPaid = res.status === "PAID"
+                            const existingOrder = pendingOrders.find(
+                              (o) => o.order_type === "terrain" && o.terrain_id === t.id && o.time_slot_id === slot.id
+                            )
+
                             return (
-                              <td key={t.id} className="p-2 align-middle">
-                                <button
-                                  onClick={() => handleCommandeTerrain(res)}
-                                  disabled={isProcessing || res.status === "PAID"}
-                                  className={cn(
-                                    "w-full p-3 rounded-xl border-2 transition-all text-left",
-                                    res.status === "PAID"
-                                      ? "border-emerald-200 bg-emerald-50/50 opacity-60 cursor-not-allowed"
-                                      : existingOrder
-                                        ? "border-blue-300 bg-blue-50 hover:border-blue-400"
-                                        : "border-neutral-200 hover:border-emerald-400 hover:bg-emerald-50"
-                                  )}
-                                >
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className={cn(
-                                      "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
-                                      res.status === "PAID"
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-amber-100 text-amber-700"
-                                    )}>
-                                      {res.status === "PAID" ? "Payée" : "Confirmée"}
-                                    </span>
-                                    {existingOrder && (
-                                      <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
-                                        +{formatCurrency(existingOrder.total)}
+                              <td key={t.id} className="border-b border-r border-gray-200 p-0 last:border-r-0" style={{ height: 130 }}>
+                                <div className={cn(
+                                  "h-full w-full px-4 py-3 flex flex-col",
+                                  isPaid
+                                    ? "bg-emerald-50"
+                                    : existingOrder
+                                      ? "bg-blue-50"
+                                      : "bg-amber-50"
+                                )}>
+                                  {/* Top: status badge + info */}
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={cn(
+                                        "text-[10px] font-bold px-2 py-0.5 rounded",
+                                        isPaid ? "bg-emerald-200 text-emerald-800" : "bg-amber-200 text-amber-800"
+                                      )}>
+                                        {isPaid ? "Payé" : "Confirmé"}
                                       </span>
+                                      {existingOrder && (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-200 text-blue-700">
+                                          Produits: {formatCurrency(existingOrder.total)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); openTerrainInfoTicket(res) }}
+                                      className="p-1 rounded-md hover:bg-white/60 text-gray-500 hover:text-gray-800 transition-colors"
+                                      title="Voir le ticket"
+                                    >
+                                      <Info className="h-4 w-4" />
+                                    </button>
+                                  </div>
+
+                                  {/* Middle: client info */}
+                                  <div className="flex-1 min-w-0">
+                                    <p className={cn("font-bold text-base truncate leading-tight", isPaid ? "text-gray-400" : "text-gray-900")}>
+                                      {getResPlayerName(res)}
+                                    </p>
+                                    {getResPlayerPhone(res) && (
+                                      <p className="text-sm text-gray-500 font-mono mt-0.5">{formatResPhone(getResPlayerPhone(res)!)}</p>
                                     )}
                                   </div>
-                                  {res.client ? (
-                                    <>
-                                      <p className="text-xs font-semibold text-neutral-900 truncate">{res.client.full_name}</p>
-                                      <p className="text-[10px] text-neutral-500 truncate">{res.client.phone}</p>
-                                    </>
-                                  ) : (
-                                    <p className="text-xs text-neutral-400">Sans client</p>
+
+                                  {/* Bottom: action buttons */}
+                                  {!isPaid && (
+                                    <div className="flex gap-2 mt-2">
+                                      {cart.length > 0 && (
+                                        <button
+                                          onClick={() => handleCommandeTerrain(res)}
+                                          disabled={isProcessing}
+                                          className="flex-1 py-2 text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors disabled:opacity-40"
+                                        >
+                                          + Produits
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => handleEncaisserTerrain(res)}
+                                        disabled={isProcessing}
+                                        className="flex-1 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-40"
+                                      >
+                                        Encaisser
+                                      </button>
+                                    </div>
                                   )}
-                                </button>
+                                  {isPaid && (
+                                    <div className="mt-2 text-center">
+                                      <span className="text-xs text-emerald-600 font-semibold">✓ Réservation payée</span>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                             )
                           })}
@@ -1867,26 +2339,28 @@ export default function CaissePage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )
-            })()}
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ─── Pending Orders Modal ─────────────────────────────────────── */}
       {showPending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-neutral-950">
-                Commandes en attente
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-neutral-950">
+                  Commandes en attente
+                </h2>
                 {pendingOrders.length > 0 && (
-                  <span className="ml-2 text-sm font-normal text-blue-600">
-                    ({pendingOrders.length})
-                  </span>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    {pendingOrders.length} commande{pendingOrders.length > 1 ? "s" : ""} — Total: <span className="font-semibold text-blue-600">{formatCurrency(pendingOrders.reduce((s, o) => s + o.total, 0))}</span>
+                  </p>
                 )}
-              </h2>
+              </div>
               <button
                 onClick={() => setShowPending(false)}
                 className="p-2 hover:bg-neutral-100 rounded-lg"
@@ -1895,90 +2369,120 @@ export default function CaissePage() {
               </button>
             </div>
 
-            {pendingOrders.length === 0 ? (
-              <div className="text-center py-8 text-neutral-400">
-                <ClipboardList className="w-10 h-10 mx-auto mb-2 stroke-1" />
-                <p className="text-sm">Aucune commande en attente</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {pendingOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="border border-neutral-200 rounded-xl p-4 hover:border-blue-200 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-950 font-mono">
-                          {order.order_number}
+            <div className="flex-1 overflow-y-auto p-6">
+              {pendingOrders.length === 0 ? (
+                <div className="text-center py-12 text-neutral-400">
+                  <ClipboardList className="w-12 h-12 mx-auto mb-3 stroke-1" />
+                  <p className="text-sm font-medium">Aucune commande en attente</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {pendingOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className={cn(
+                        "border-2 rounded-2xl overflow-hidden transition-all hover:shadow-lg",
+                        order.order_type === "terrain"
+                          ? "border-emerald-200 hover:border-emerald-300"
+                          : "border-blue-200 hover:border-blue-300"
+                      )}
+                    >
+                      {/* Card header with type color */}
+                      <div className={cn(
+                        "px-4 py-3 flex items-center justify-between",
+                        order.order_type === "terrain"
+                          ? "bg-emerald-50"
+                          : "bg-blue-50"
+                      )}>
+                        <div className="flex items-center gap-2">
+                          {order.order_type === "terrain" ? (
+                            <div className="h-8 w-8 rounded-lg bg-emerald-500 flex items-center justify-center">
+                              <MapPin className="h-4 w-4 text-white" />
+                            </div>
+                          ) : (
+                            <div className="h-8 w-8 rounded-lg bg-blue-500 flex items-center justify-center">
+                              <ClipboardList className="h-4 w-4 text-white" />
+                            </div>
+                          )}
+                          <div>
+                            {order.order_type === "terrain" && order.terrain ? (
+                              <p className="text-sm font-bold text-neutral-900">Terrain {order.terrain.code}</p>
+                            ) : order.order_type === "table" && order.table ? (
+                              <p className="text-sm font-bold text-neutral-900">{order.table.name}</p>
+                            ) : (
+                              <p className="text-sm font-bold text-neutral-900">{order.order_number}</p>
+                            )}
+                            <p className="text-[11px] text-neutral-500 font-mono">{order.order_number}</p>
+                          </div>
+                        </div>
+                        <p className="text-xl font-bold text-neutral-950">
+                          {formatCurrency(order.total)}
                         </p>
-                        <p className="text-xs text-neutral-400 mt-0.5">
-                          {new Date(order.created_at).toLocaleString("fr-FR", {
+                      </div>
+
+                      {/* Card body - clear info */}
+                      <div className="px-4 py-3 space-y-2">
+                        {/* Créneau for terrain */}
+                        {order.order_type === "terrain" && order.time_slot && (
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+                            <span className="text-sm font-semibold text-neutral-800">
+                              {order.time_slot.start_time.slice(0, 5)} – {order.time_slot.end_time.slice(0, 5)}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Joueur */}
+                        {order.client_name && (
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-4 rounded-full bg-neutral-200 flex items-center justify-center flex-shrink-0">
+                              <span className="text-[9px] font-bold text-neutral-600">{order.client_name.charAt(0)}</span>
+                            </div>
+                            <span className="text-sm font-medium text-neutral-800">{order.client_name}</span>
+                          </div>
+                        )}
+
+                        {/* Téléphone */}
+                        {order.client_phone && (
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="h-4 w-4 text-neutral-400 flex-shrink-0" />
+                            <span className="text-sm text-neutral-600 font-medium">{order.client_phone}</span>
+                          </div>
+                        )}
+
+                        {/* Time + employee */}
+                        <p className="text-[11px] text-neutral-400">
+                          {new Date(order.created_at).toLocaleTimeString("fr-FR", {
                             hour: "2-digit",
                             minute: "2-digit",
-                            day: "2-digit",
-                            month: "2-digit",
                           })}
-                          {" — "}
+                          {" · "}
                           {order.employee_name}
                         </p>
                       </div>
-                      <p className="text-lg font-bold text-neutral-950">
-                        {formatCurrency(order.total)}
-                      </p>
-                    </div>
 
-                    {/* Order type info */}
-                    <div className="flex items-center gap-2 mb-3 text-xs flex-wrap">
-                      {order.order_type === "table" && order.table && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-md font-medium">
-                          <ClipboardList className="h-3 w-3" />
-                          {order.table.name}
-                        </span>
-                      )}
-                      {order.order_type === "terrain" && (
-                        <>
-                          {order.terrain && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md font-medium">
-                              <MapPin className="h-3 w-3" />
-                              {order.terrain.code}
-                            </span>
-                          )}
-                          {order.time_slot && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 text-neutral-600 rounded-md font-medium">
-                              <Clock className="h-3 w-3" />
-                              {order.time_slot.start_time.slice(0, 5)} – {order.time_slot.end_time.slice(0, 5)}
-                            </span>
-                          )}
-                          {order.client_name && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 text-neutral-600 rounded-md font-medium">
-                              {order.client_name}{order.client_phone ? ` — ${order.client_phone}` : ""}
-                            </span>
-                          )}
-                        </>
-                      )}
+                      {/* Card actions */}
+                      <div className="px-4 pb-3 flex gap-2">
+                        <button
+                          onClick={() => openPayModal(order)}
+                          className="flex-1 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <Banknote className="h-4 w-4" />
+                          Encaisser
+                        </button>
+                        <button
+                          onClick={() => handleCancelPendingOrder(order)}
+                          className="px-4 py-2.5 text-red-600 text-sm font-medium border border-red-200 rounded-xl hover:bg-red-50 transition-colors flex items-center gap-1.5"
+                        >
+                          <X className="h-4 w-4" />
+                          Annuler
+                        </button>
+                      </div>
                     </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => openPayModal(order)}
-                        className="flex-1 py-2.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5"
-                      >
-                        <Banknote className="h-3.5 w-3.5" />
-                        Encaisser
-                      </button>
-                      <button
-                        onClick={() => handleCancelPendingOrder(order)}
-                        className="px-3 py-2.5 text-red-600 text-xs font-medium border border-red-200 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1.5"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Annuler
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2515,82 +3019,775 @@ export default function CaissePage() {
       {/* ─── History Modal ──────────────────────────────────────────── */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-neutral-950">
-                Tickets du jour
-              </h2>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="p-2 hover:bg-neutral-100 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3 mb-4 text-sm">
-              <div className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg font-medium">
-                {formatCurrency(todayTotal)}
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-neutral-950">Historique du jour</h2>
+                <p className="text-xs text-neutral-500 mt-0.5">{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
               </div>
-              <div className="text-neutral-500">
-                {todayOrders.length} ticket{todayOrders.length > 1 ? "s" : ""}
+              <div className="flex items-center gap-2">
+                <button onClick={() => { const d = new Date().toISOString().split("T")[0]; setZReportDate(d); setZReportOrders(todayOrders); setZReportExpenses(sessionExpenses); setShowHistory(false); setShowZReport(true) }} className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-neutral-700 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors">
+                  <Printer className="h-3.5 w-3.5" />
+                  Rapport Z
+                </button>
+                <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-neutral-100 rounded-lg"><X className="w-5 h-5" /></button>
               </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto divide-y divide-neutral-100">
+            <div className="px-6 py-3 bg-neutral-50 border-b border-neutral-100 flex items-center gap-6 text-sm flex-shrink-0 flex-wrap">
+              <div><span className="text-neutral-500">Total</span><span className="ml-2 font-bold text-neutral-900">{formatCurrency(todayTotal)}</span></div>
+              <div className="w-px h-4 bg-neutral-300" />
+              <div><span className="text-neutral-500">Réservations</span><span className="ml-2 font-bold text-emerald-700">{formatCurrency(todayTerrainTotal)}</span></div>
+              <div className="w-px h-4 bg-neutral-300" />
+              <div><span className="text-neutral-500">Caisse</span><span className="ml-2 font-bold text-blue-700">{formatCurrency(todayCaisseTotal)}</span></div>
+              <div className="w-px h-4 bg-neutral-300" />
+              <div><span className="text-neutral-500">Dépenses</span><span className="ml-2 font-bold text-red-600">-{formatCurrency(todayExpensesTotal)}</span></div>
+              <div className="w-px h-4 bg-neutral-300" />
+              <div><span className="text-neutral-500">Tickets</span><span className="ml-2 font-bold text-neutral-900">{todayOrders.length}</span></div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
               {todayOrders.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
-                  <Receipt className="h-10 w-10 mb-3 stroke-1" />
-                  <p className="text-sm">Aucun ticket aujourd&apos;hui</p>
+                <div className="flex flex-col items-center justify-center py-20 text-neutral-400">
+                  <Receipt className="h-12 w-12 mb-3 stroke-1" />
+                  <p className="text-sm font-medium">Aucun ticket aujourd&apos;hui</p>
                 </div>
               ) : (
-                todayOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex items-center justify-between py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-neutral-900 font-mono">
-                        {order.order_number}
-                      </p>
-                      <p className="text-xs text-neutral-400">
-                        {new Date(order.created_at).toLocaleTimeString("fr-FR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}{" "}
-                        — {order.employee_name}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-neutral-900">
-                        {formatCurrency(order.total)}
-                      </p>
-                      <span
-                        className={cn(
-                          "text-[10px] font-medium px-2 py-0.5 rounded-full",
-                          order.payment_method === "cash"
-                            ? "bg-emerald-50 text-emerald-600"
-                            : order.payment_method === "card"
-                              ? "bg-blue-50 text-blue-600"
-                              : "bg-purple-50 text-purple-600"
-                        )}
+                <>
+                <table className="w-full">
+                  <thead className="sticky top-0 bg-white border-b border-neutral-200 z-10">
+                    <tr className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                      <th className="px-6 py-2.5 text-left">N°</th>
+                      <th className="px-3 py-2.5 text-left">Heure</th>
+                      <th className="px-3 py-2.5 text-left">Type</th>
+                      <th className="px-3 py-2.5 text-left">Détail</th>
+                      <th className="px-3 py-2.5 text-right">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {todayOrders.slice(historyPage * 10, (historyPage + 1) * 10).map((order) => {
+                      return (
+                        <tr key={order.id} className="hover:bg-neutral-50 transition-colors">
+                          <td className="px-6 py-3">
+                            <button onClick={() => openTicketDetail(order)} className="text-sm font-mono font-semibold text-blue-600 hover:text-blue-800 hover:underline transition-colors">
+                              {order.order_number}
+                            </button>
+                          </td>
+                          <td className="px-3 py-3 text-sm text-neutral-600">
+                            {new Date(order.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", order.order_type === "terrain" ? "bg-emerald-100 text-emerald-700" : order.order_type === "table" ? "bg-blue-100 text-blue-700" : "bg-neutral-100 text-neutral-600")}>
+                              {order.order_type === "terrain" ? "Terrain" : order.order_type === "table" ? "Table" : "Direct"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-xs text-neutral-500">
+                            {order.order_type === "terrain" && order.terrain
+                              ? `${(order.terrain as { code: string }).code}${order.time_slot ? ` · ${(order.time_slot as { start_time: string }).start_time.slice(0, 5)}` : ""}${order.client_name ? ` · ${order.client_name}` : ""}`
+                              : order.order_type === "table" && order.table ? (order.table as { name: string }).name : "—"}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <span className="text-sm font-bold text-neutral-900">{formatCurrency(getOrderFullTotal(order))}</span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                {/* Pagination */}
+                {todayOrders.length > 10 && (
+                  <div className="px-6 py-3 border-t border-neutral-100 flex items-center justify-between bg-white sticky bottom-0">
+                    <span className="text-xs text-neutral-500">
+                      {historyPage * 10 + 1}–{Math.min((historyPage + 1) * 10, todayOrders.length)} sur {todayOrders.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={historyPage === 0}
+                        onClick={() => setHistoryPage(p => p - 1)}
+                        className="px-3 py-1.5 text-xs font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       >
-                        {order.payment_method === "cash"
-                          ? "Espèces"
-                          : order.payment_method === "card"
-                            ? "Carte"
-                            : "Mobile"}
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="text-xs font-semibold text-neutral-700">
+                        {historyPage + 1} / {Math.ceil(todayOrders.length / 10)}
                       </span>
+                      <button
+                        disabled={(historyPage + 1) * 10 >= todayOrders.length}
+                        onClick={() => setHistoryPage(p => p + 1)}
+                        className="px-3 py-1.5 text-xs font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
-                ))
+                )}
+                </>
+              )}
+              {sessionExpenses.length > 0 && (
+                <div className="border-t-2 border-neutral-200">
+                  <div className="px-6 py-2.5 bg-red-50/50"><span className="text-xs font-bold text-red-700 uppercase tracking-wider">Dépenses</span></div>
+                  <table className="w-full">
+                    <tbody className="divide-y divide-neutral-100">
+                      {sessionExpenses.map((exp) => (
+                        <tr key={exp.id} className="hover:bg-red-50/30 transition-colors">
+                          <td className="px-6 py-2.5 text-sm text-neutral-700">{exp.description}</td>
+                          <td className="px-3 py-2.5 text-xs text-neutral-400">{new Date(exp.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</td>
+                          <td className="px-3 py-2.5"><span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-neutral-100 text-neutral-600">{exp.category}</span></td>
+                          <td className="px-3 py-2.5 text-right"><span className="text-sm font-bold text-red-600">-{formatCurrency(exp.amount)}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
         </div>
       )}
 
+      {/* ─── Ticket Detail Modal ─────────────────────────────────────── */}
+      {selectedTicket && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between flex-shrink-0">
+              <h2 className="text-sm font-bold text-neutral-950">Ticket {selectedTicket.order_number}</h2>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    const el = document.getElementById("ticket-reprint-content")
+                    if (!el) return
+                    const win = window.open("", "_blank", "width=302,height=600")
+                    if (!win) return
+                    win.document.write(`<html><head><title>Ticket ${selectedTicket.order_number}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:12px;width:72mm;padding:4mm}</style></head><body>`)
+                    win.document.write(el.innerHTML)
+                    win.document.write("</body></html>")
+                    win.document.close()
+                    win.focus()
+                    setTimeout(() => { win.print(); win.close() }, 250)
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  Imprimer
+                </button>
+                <button onClick={() => setSelectedTicket(null)} className="p-1.5 hover:bg-neutral-100 rounded-lg"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 bg-neutral-100">
+              <div id="ticket-reprint-content" className="bg-white mx-auto shadow-sm border border-neutral-200" style={{ width: "72mm", fontFamily: "'Courier New', monospace", fontSize: "12px", padding: "4mm" }}>
+                <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "14px", marginBottom: "2px" }}>PADEL HOUSE</div>
+                <div style={{ textAlign: "center", fontSize: "10px", color: "#666", marginBottom: "6px" }}>
+                  {new Date(selectedTicket.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })} à {new Date(selectedTicket.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                </div>
+                <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}><span>Ticket</span><span style={{ fontWeight: "bold" }}>{selectedTicket.order_number}</span></div>
+                {selectedTicket.employee_name && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}><span>Caissier</span><span>{selectedTicket.employee_name}</span></div>
+                )}
+                {selectedTicket.order_type === "terrain" && selectedTicket.terrain && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}><span>Terrain</span><span style={{ fontWeight: "bold" }}>{(selectedTicket.terrain as { code: string }).code}</span></div>
+                )}
+                {selectedTicket.order_type === "terrain" && selectedTicket.time_slot && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}><span>Créneau</span><span>{(selectedTicket.time_slot as { start_time: string; end_time: string }).start_time.slice(0, 5)} - {(selectedTicket.time_slot as { start_time: string; end_time: string }).end_time.slice(0, 5)}</span></div>
+                )}
+                {selectedTicket.client_name && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}><span>Client</span><span>{selectedTicket.client_name}</span></div>
+                )}
+                {selectedTicket.order_type === "table" && selectedTicket.table && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}><span>Table</span><span style={{ fontWeight: "bold" }}>{(selectedTicket.table as { name: string }).name}</span></div>
+                )}
+                <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                {selectedTicket.order_type === "terrain" && ticketReservationPrice > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>Réservation terrain</span><span>{formatCurrency(ticketReservationPrice)}</span></div>
+                )}
+                {selectedTicketItems.map((item, idx) => (
+                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>{item.quantity}x {item.product_name}</span><span>{formatCurrency(item.total)}</span></div>
+                ))}
+                {selectedTicketItems.length === 0 && !(selectedTicket.order_type === "terrain" && ticketReservationPrice > 0) && (
+                  <div style={{ textAlign: "center", fontSize: "10px", color: "#999", padding: "4px 0" }}>Aucun article</div>
+                )}
+                <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontWeight: "bold", fontSize: "14px" }}>
+                  <span>TOTAL</span>
+                  <span>{formatCurrency(selectedTicket.total + (selectedTicket.order_type === "terrain" ? ticketReservationPrice : 0))}</span>
+                </div>
+                <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                {(() => {
+                  const pmts = selectedTicketPayments.length > 0
+                    ? selectedTicketPayments
+                    : (allOrderPayments[selectedTicket.id] || []).map(p => ({ ...p, amount_received: p.amount, amount_returned: 0 }))
+                  if (pmts.length > 0) {
+                    const totalReceived = pmts.reduce((s, p) => s + p.amount_received, 0)
+                    const totalReturned = pmts.reduce((s, p) => s + p.amount_returned, 0)
+                    return (
+                      <>
+                        <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "3px", textTransform: "uppercase" }}>Paiement</div>
+                        {pmts.map((p, i) => (
+                          <div key={i} style={{ padding: "2px 0", fontSize: "11px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}><span>{p.method_name}</span><span style={{ fontWeight: "bold" }}>{formatCurrency(p.amount)}</span></div>
+                            {p.amount_received > 0 && p.amount_received !== p.amount && (
+                              <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "10px", paddingLeft: "8px" }}><span>Reçu</span><span>{formatCurrency(p.amount_received)}</span></div>
+                            )}
+                            {p.amount_returned > 0 && (
+                              <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "10px", paddingLeft: "8px" }}><span>Rendu</span><span>{formatCurrency(p.amount_returned)}</span></div>
+                            )}
+                          </div>
+                        ))}
+                        <div style={{ borderTop: "1px dotted #999", margin: "4px 0" }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px", fontWeight: "bold" }}><span>Montant reçu</span><span>{formatCurrency(totalReceived)}</span></div>
+                        {totalReturned > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px", color: "#666" }}><span>Montant rendu</span><span>{formatCurrency(totalReturned)}</span></div>
+                        )}
+                      </>
+                    )
+                  }
+                  return (
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}><span>Mode</span><span style={{ fontWeight: "bold" }}>{translatePaymentMethod(selectedTicket.payment_method)}</span></div>
+                  )
+                })()}
+                <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                <div style={{ textAlign: "center", fontSize: "9px", color: "#999" }}>Merci de votre visite !</div>
+                <div style={{ textAlign: "center", fontSize: "9px", color: "#999" }}>PADEL HOUSE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Z Report Print Preview ───────────────────────────────────── */}
+      {showZReport && (() => {
+        const zCaisse = zReportOrders.reduce((s, o) => s + o.total, 0)
+        const zReservation = zReportOrders
+          .filter(o => o.order_type === "terrain")
+          .reduce((s, o) => s + getOrderSlotPrice(o), 0)
+        const zDepenses = zReportExpenses.reduce((s, e) => s + e.amount, 0)
+        const zTotal = zReservation + zCaisse - zDepenses
+        const zPmBreakdown = zReportOrders.reduce((acc, o) => {
+          const method = o.payment_method === "mixed" ? "Espèces" : translatePaymentMethod(o.payment_method)
+          acc[method] = (acc[method] || 0) + o.total
+          return acc
+        }, {} as Record<string, number>)
+        const zDateObj = new Date(zReportDate + "T12:00:00")
+        const zDateLabel = zDateObj.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long", year: "numeric" })
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 max-h-[92vh] flex flex-col overflow-hidden">
+              <div className="px-5 py-3 border-b border-neutral-100 flex flex-col gap-2 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-bold text-neutral-950">Rapport Z</h2>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById("z-report-content")
+                        if (!el) return
+                        const win = window.open("", "_blank", "width=302,height=600")
+                        if (!win) return
+                        win.document.write(`<html><head><title>Rapport Z</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:12px;width:72mm;padding:4mm}</style></head><body>`)
+                        win.document.write(el.innerHTML)
+                        win.document.write("</body></html>")
+                        win.document.close()
+                        win.focus()
+                        setTimeout(() => { win.print(); win.close() }, 250)
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Imprimer
+                    </button>
+                    <button onClick={() => setShowZReport(false)} className="p-1.5 hover:bg-neutral-100 rounded-lg"><X className="w-4 h-4" /></button>
+                  </div>
+                </div>
+                {/* Date navigation */}
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => {
+                      const d = new Date(zReportDate + "T12:00:00")
+                      d.setDate(d.getDate() - 1)
+                      const nd = d.toISOString().split("T")[0]
+                      setZReportDate(nd)
+                      loadZReportForDate(nd)
+                    }}
+                    className="p-1.5 hover:bg-neutral-100 rounded-lg"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="text-xs font-semibold text-neutral-700 min-w-[130px] text-center">{zDateLabel}</span>
+                  <button
+                    onClick={() => {
+                      const d = new Date(zReportDate + "T12:00:00")
+                      d.setDate(d.getDate() + 1)
+                      const nd = d.toISOString().split("T")[0]
+                      setZReportDate(nd)
+                      loadZReportForDate(nd)
+                    }}
+                    className="p-1.5 hover:bg-neutral-100 rounded-lg"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const nd = new Date().toISOString().split("T")[0]
+                      setZReportDate(nd)
+                      setZReportOrders(todayOrders)
+                      setZReportExpenses(sessionExpenses)
+                    }}
+                    className="px-2 py-1 text-[10px] font-medium bg-neutral-100 hover:bg-neutral-200 rounded transition-colors"
+                  >
+                    Aujourd&apos;hui
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 bg-neutral-100">
+                {zReportLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="animate-spin h-6 w-6 border-2 border-neutral-400 border-t-transparent rounded-full" />
+                  </div>
+                ) : (
+                  <div id="z-report-content" className="bg-white mx-auto shadow-sm border border-neutral-200" style={{ width: "72mm", fontFamily: "'Courier New', monospace", fontSize: "12px", padding: "4mm" }}>
+                    <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "14px", marginBottom: "4px" }}>PADEL HOUSE</div>
+                    <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "13px", marginBottom: "2px" }}>RAPPORT Z</div>
+                    <div style={{ textAlign: "center", fontSize: "10px", color: "#666" }}>{zDateLabel}</div>
+                    <div style={{ textAlign: "center", fontSize: "10px", color: "#666", marginBottom: "6px" }}>{employee?.full_name || employee?.username}</div>
+                    <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontWeight: "bold", fontSize: "13px" }}><span>TOTAL</span><span>{formatCurrency(zTotal)}</span></div>
+                    <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>Réservations</span><span>{formatCurrency(zReservation)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>Caisse</span><span>{formatCurrency(zCaisse)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>Dépenses</span><span style={{ color: "#dc2626" }}>-{formatCurrency(zDepenses)}</span></div>
+                    <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                    <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "4px", textTransform: "uppercase" }}>Modalités de paiement</div>
+                    {Object.entries(zPmBreakdown).map(([method, amount]) => (
+                      <div key={method} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>{method}</span><span>{formatCurrency(amount)}</span></div>
+                    ))}
+                    <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                    <div style={{ fontSize: "10px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span>Nb tickets</span><span>{zReportOrders.length}</span></div>
+                      {currentSession && <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span>Fond de caisse</span><span>{formatCurrency(currentSession.opening_amount)}</span></div>}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span>Nb dépenses</span><span>{zReportExpenses.length}</span></div>
+                    </div>
+                    <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontWeight: "bold" }}><span>NET EN CAISSE</span><span>{formatCurrency(zTotal)}</span></div>
+                    <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                    <div style={{ textAlign: "center", fontSize: "9px", color: "#999", marginTop: "6px" }}>Généré le {new Date().toLocaleDateString("fr-FR")} à {new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ─── Product Modal ──────────────────────────────────────────── */}
+      {/* ─── Expense Modal ──────────────────────────────────────────── */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowExpenseModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-5 pt-5 pb-4 border-b border-neutral-100 flex items-center justify-between">
+              <h2 className="text-base font-bold text-neutral-900">Nouvelle dépense</h2>
+              <button onClick={() => setShowExpenseModal(false)} className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-400">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Type de dépense */}
+              {expenseTypes.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">Type</label>
+                  <select
+                    value={expenseForm.expense_type_id}
+                    onChange={(e) => setExpenseForm({ ...expenseForm, expense_type_id: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-amber-400 bg-white"
+                  >
+                    <option value="">-- Aucun --</option>
+                    {expenseTypes.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-medium text-neutral-500 mb-1.5">Description *</label>
+                <input
+                  type="text"
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-amber-400"
+                  placeholder="Ex: Achat de serviettes"
+                  autoFocus
+                />
+              </div>
+
+              {/* Montant */}
+              <div>
+                <label className="block text-xs font-medium text-neutral-500 mb-1.5">Montant (FCFA) *</label>
+                <input
+                  type="number"
+                  value={expenseForm.amount}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                  className="w-full px-3 py-3 text-lg font-bold text-center border border-neutral-200 rounded-xl focus:outline-none focus:border-amber-400"
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Bénéficiaire */}
+              <div>
+                <label className="block text-xs font-medium text-neutral-500 mb-1.5">Bénéficiaire <span className="text-neutral-300">(optionnel)</span></label>
+                <input
+                  type="text"
+                  value={expenseForm.beneficiaire}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, beneficiaire: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:border-amber-400"
+                  placeholder="Nom du bénéficiaire"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="px-5 pb-5 flex gap-3">
+              <button
+                onClick={() => setShowExpenseModal(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-xl hover:bg-neutral-200 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveExpense}
+                disabled={isSavingExpense || !expenseForm.description || !expenseForm.amount}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-amber-500 rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isSavingExpense ? "..." : "Enregistrer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Reservation Modal ────────────────────────────────────────── */}
+      {showReservationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setShowReservationModal(false); setResModalSelectedRes(null); setResModalQuickAdd(null) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[98vw] max-w-[1400px] h-[95vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header with date nav */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 flex-shrink-0">
+              <div className="flex items-center gap-4">
+                <Calendar className="h-5 w-5 text-emerald-600" />
+                <h2 className="text-lg font-bold text-neutral-900">Réservations</h2>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    const d = new Date(resModalDate)
+                    d.setDate(d.getDate() - 1)
+                    const nd = d.toISOString().split("T")[0]
+                    setResModalDate(nd)
+                    loadResModalReservations(nd)
+                  }}
+                  className="p-2 hover:bg-neutral-100 rounded-lg"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm font-semibold text-neutral-800 min-w-[140px] text-center">
+                  {new Date(resModalDate + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" })}
+                </span>
+                <button
+                  onClick={() => {
+                    const d = new Date(resModalDate)
+                    d.setDate(d.getDate() + 1)
+                    const nd = d.toISOString().split("T")[0]
+                    setResModalDate(nd)
+                    loadResModalReservations(nd)
+                  }}
+                  className="p-2 hover:bg-neutral-100 rounded-lg"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    const nd = new Date().toISOString().split("T")[0]
+                    setResModalDate(nd)
+                    loadResModalReservations(nd)
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
+                >
+                  Aujourd&apos;hui
+                </button>
+              </div>
+              <button onClick={() => { setShowReservationModal(false); setResModalSelectedRes(null); setResModalQuickAdd(null) }} className="p-2 hover:bg-neutral-100 rounded-lg text-neutral-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Grid */}
+            <div className="flex-1 overflow-auto">
+              {resModalLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full" />
+                </div>
+              ) : (
+                <table className="w-full table-fixed border-collapse">
+                  <colgroup>
+                    <col className="w-16" />
+                    {terrains.filter(t => t.is_active).map(t => (
+                      <col key={t.id} />
+                    ))}
+                  </colgroup>
+                  <thead className="sticky top-0 z-20">
+                    <tr>
+                      <th className="border-b border-r border-gray-300 bg-gray-900 py-3 px-2">
+                        <span className="text-xs font-medium text-gray-400">Heure</span>
+                      </th>
+                      {terrains.filter(t => t.is_active).map(t => (
+                        <th key={t.id} className="border-b border-r border-gray-700 py-3 bg-gray-900 last:border-r-0">
+                          <span className="text-sm font-semibold text-white">Terrain {t.code}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {timeSlots.filter(s => s.is_active).map((slot, slotIndex) => {
+                      const activeTerrainsList = terrains.filter(t => t.is_active)
+                      const getResForCell = (terrainId: number, slotId: number) =>
+                        resModalReservations.find(r => r.terrain_id === terrainId && r.time_slot_id === slotId)
+
+                      return (
+                        <tr key={slot.id} className={slotIndex % 2 === 1 ? "bg-gray-50" : "bg-white"}>
+                          {/* Time */}
+                          <td className="border-b border-r border-gray-300 py-3 px-3 align-middle">
+                            <div className="text-base font-bold text-gray-900">{slot.start_time.slice(0, 5)}</div>
+                            <div className="text-sm text-gray-500">{slot.end_time.slice(0, 5)}</div>
+                          </td>
+
+                          {/* Cells */}
+                          {activeTerrainsList.map(t => {
+                            const res = getResForCell(t.id, slot.id)
+                            const statusCfg: Record<string, { label: string; color: string; bg: string }> = {
+                              PENDING: { label: "En attente", color: "text-amber-700", bg: "bg-amber-100" },
+                              CONFIRMED: { label: "Confirmé", color: "text-blue-700", bg: "bg-blue-100" },
+                              PAID: { label: "Payé", color: "text-emerald-700", bg: "bg-emerald-100" },
+                            }
+
+                            if (!res) {
+                              return (
+                                <td key={t.id} className="border-b border-r border-gray-200 p-0 h-16 last:border-r-0">
+                                  <div
+                                    onClick={() => {
+                                      setResModalQuickAdd({ terrainId: t.id, slotId: slot.id })
+                                      setResModalQuickAddForm({ name: "", phone: "" })
+                                    }}
+                                    className="h-full w-full flex items-center justify-center cursor-pointer hover:bg-gray-50 group"
+                                  >
+                                    <span className="text-gray-300 group-hover:text-gray-400 text-xl font-light">+</span>
+                                  </div>
+                                </td>
+                              )
+                            }
+
+                            const cfg = statusCfg[res.status] || statusCfg.PENDING
+
+                            return (
+                              <td key={t.id} className="border-b border-r border-gray-200 p-0 h-16 last:border-r-0">
+                                <div
+                                  onClick={() => setResModalSelectedRes(res)}
+                                  className={cn(
+                                    "h-full w-full cursor-pointer px-3 py-2 flex items-center justify-between",
+                                    cfg.bg
+                                  )}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-bold text-base truncate text-gray-900">
+                                      {getResPlayerName(res)}
+                                    </p>
+                                    {getResPlayerPhone(res) && (
+                                      <p className={cn("text-sm font-mono", cfg.color)}>
+                                        {formatResPhone(getResPlayerPhone(res)!)}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col items-end gap-1 ml-2">
+                                    <span className={cn(
+                                      "text-xs font-bold px-2 py-0.5 rounded",
+                                      res.status === "PENDING" && "bg-amber-200 text-amber-800",
+                                      res.status === "CONFIRMED" && "bg-blue-200 text-blue-800",
+                                      res.status === "PAID" && "bg-emerald-200 text-emerald-800"
+                                    )}>
+                                      {cfg.label}
+                                    </span>
+                                    <span className="text-sm font-bold text-gray-700">
+                                      {res.time_slot?.price ? res.time_slot.price.toLocaleString("fr-FR") + " F" : ""}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Reservation Quick Add Sub-modal ────────────────────────── */}
+      {resModalQuickAdd && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setResModalQuickAdd(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[400px] mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-neutral-900 to-neutral-800 px-5 py-4">
+              <h3 className="font-bold text-white text-base">Nouvelle réservation</h3>
+              <div className="flex items-center gap-3 mt-1.5">
+                <span className="bg-white/20 text-white text-xs font-medium px-2.5 py-0.5 rounded-full">
+                  {terrains.find(t => t.id === resModalQuickAdd.terrainId)?.code}
+                </span>
+                <span className="text-white/80 text-xs">
+                  {timeSlots.find(ts => ts.id === resModalQuickAdd.slotId)?.start_time.slice(0, 5)} - {timeSlots.find(ts => ts.id === resModalQuickAdd.slotId)?.end_time.slice(0, 5)}
+                </span>
+                <span className="text-white/60 text-xs">
+                  {formatCurrency(timeSlots.find(ts => ts.id === resModalQuickAdd.slotId)?.price || 0)}
+                </span>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-neutral-500 block mb-1.5">Nom du client *</label>
+                <input
+                  type="text"
+                  value={resModalQuickAddForm.name}
+                  onChange={e => setResModalQuickAddForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Prénom Nom"
+                  autoFocus
+                  className="w-full px-3 py-2.5 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-neutral-500 block mb-1.5">Téléphone *</label>
+                <input
+                  type="tel"
+                  value={resModalQuickAddForm.phone}
+                  onChange={e => setResModalQuickAddForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="07 XX XX XX XX"
+                  className="w-full px-3 py-2.5 border border-neutral-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
+                />
+                <p className="text-[10px] text-neutral-400 mt-1">Format: 10 chiffres commençant par 01, 05 ou 07</p>
+              </div>
+            </div>
+            <div className="px-5 pb-5 flex gap-3">
+              <button
+                onClick={() => { setResModalQuickAdd(null); setResModalQuickAddForm({ name: "", phone: "" }) }}
+                className="flex-1 py-2.5 rounded-xl border-2 border-neutral-200 text-neutral-600 font-semibold text-sm hover:bg-neutral-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                disabled={!resModalQuickAddForm.name.trim() || resModalQuickAddForm.phone.replace(/\D/g, "").length !== 10}
+                onClick={handleResModalQuickAdd}
+                className={cn(
+                  "flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all",
+                  resModalQuickAddForm.name.trim() && resModalQuickAddForm.phone.replace(/\D/g, "").length === 10
+                    ? "bg-neutral-900 text-white hover:bg-neutral-800"
+                    : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                )}
+              >
+                Réserver
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Reservation Detail Sub-modal ────────────────────────────── */}
+      {resModalSelectedRes && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setResModalSelectedRes(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-80" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-gray-400">#{resModalSelectedRes.id}</span>
+                <h3 className="font-bold text-gray-900">{getResPlayerName(resModalSelectedRes)}</h3>
+              </div>
+              <button onClick={() => setResModalSelectedRes(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Info */}
+            <div className="px-4 py-3 space-y-2 text-sm border-b">
+              {getResPlayerPhone(resModalSelectedRes) && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Téléphone</span>
+                  <span className="font-mono font-semibold">{formatResPhone(getResPlayerPhone(resModalSelectedRes)!)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-gray-500">Terrain</span>
+                <span className="font-semibold">{resModalSelectedRes.terrain?.code}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Créneau</span>
+                <span className="font-semibold">
+                  {resModalSelectedRes.time_slot?.start_time?.slice(0, 5)} - {resModalSelectedRes.time_slot?.end_time?.slice(0, 5)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Prix</span>
+                <span className="font-bold text-emerald-600">
+                  {resModalSelectedRes.time_slot?.price?.toLocaleString("fr-FR")} F
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Statut</span>
+                <span className={cn(
+                  "font-bold",
+                  resModalSelectedRes.status === "PAID" ? "text-emerald-700" : resModalSelectedRes.status === "CONFIRMED" ? "text-blue-700" : "text-amber-700"
+                )}>
+                  {resModalSelectedRes.status === "PAID" ? "Payé" : resModalSelectedRes.status === "CONFIRMED" ? "Confirmé" : "En attente"}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 space-y-2">
+              {resModalSelectedRes.status === "PAID" && (
+                <button
+                  onClick={() => handleResModalStatusChange(resModalSelectedRes.id, "CONFIRMED")}
+                  className="w-full py-2 rounded-lg bg-red-500 text-white font-semibold text-sm hover:bg-red-600"
+                >
+                  Annuler le paiement
+                </button>
+              )}
+              {resModalSelectedRes.status === "PENDING" && (
+                <button
+                  onClick={() => handleResModalStatusChange(resModalSelectedRes.id, "CONFIRMED")}
+                  className="w-full py-2 rounded-lg bg-blue-500 text-white font-semibold text-sm hover:bg-blue-600"
+                >
+                  Confirmer
+                </button>
+              )}
+              {(resModalSelectedRes.status === "PENDING" || resModalSelectedRes.status === "CONFIRMED") && (
+                <>
+                  <button
+                    onClick={() => handleResModalStatusChange(resModalSelectedRes.id, "PAID")}
+                    className="w-full py-2 rounded-lg bg-emerald-500 text-white font-semibold text-sm hover:bg-emerald-600"
+                  >
+                    Marquer payé
+                  </button>
+                  <button
+                    onClick={() => handleResModalStatusChange(resModalSelectedRes.id, "CANCELED")}
+                    className="w-full py-2 rounded-lg border border-red-300 text-red-600 font-semibold text-sm hover:bg-red-50"
+                  >
+                    Annuler la réservation
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showProductModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
@@ -2700,6 +3897,8 @@ export default function CaissePage() {
           </div>
         </div>
       )}
+      {/* ─── Virtual Keyboard ─────────────────────────────────────────── */}
+      <VirtualKeyboard enabled={vkEnabled} />
     </div>
   )
 }

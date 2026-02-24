@@ -13,6 +13,8 @@ interface DashboardStats {
   // Padel - Revenus
   paidRevenue: number      // Encaissé (status = PAID)
   totalReserved: number    // Total réservé (CONFIRMED + PAID + PENDING)
+  // Caisse - Revenus POS
+  caisseRevenue: number
   // Dépenses
   periodExpenses: number
   // Réservations
@@ -53,7 +55,9 @@ export default function DashboardPage() {
           { data: allExpenses },
           { data: terrains },
           { data: timeSlots },
-          { data: products }
+          { data: products },
+          { data: posOrders },
+          { data: posExpensesData }
         ] = await Promise.all([
           supabase.from('reservations').select(`
             id, status, reservation_date, created_at,
@@ -62,7 +66,9 @@ export default function DashboardPage() {
           supabase.from('expenses').select('expense_date, amount'),
           supabase.from('terrains').select('id, code, is_active').eq('is_active', true),
           supabase.from('time_slots').select('id, start_time, end_time, price'),
-          supabase.from('products').select('id, name, quantity, stock_threshold')
+          supabase.from('products').select('id, name, quantity, stock_threshold'),
+          supabase.from('pos_orders').select('total, created_at, status, order_type').eq('status', 'completed'),
+          supabase.from('pos_expenses').select('amount, created_at')
         ])
 
         const reservations = allReservations || []
@@ -95,10 +101,20 @@ export default function DashboardPage() {
           .filter(r => r.status === 'CONFIRMED' || r.status === 'PAID' || r.status === 'PENDING')
           .reduce((sum, r) => sum + getPrice(r), 0)
 
-        // Period expenses
+        // Period expenses (general + POS)
         const periodExpenses = expenses
           .filter(e => e.expense_date >= periodStart && e.expense_date <= periodEnd)
           .reduce((sum, e) => sum + (e.amount || 0), 0)
+          + (posExpensesData || []).filter(e => {
+            const d = e.created_at?.split('T')[0]
+            return d && d >= periodStart && d <= periodEnd
+          }).reduce((sum, e) => sum + (e.amount || 0), 0)
+
+        // Caisse revenue (POS orders excluding terrain, which is already counted in Padel)
+        const caisseRevenue = (posOrders || []).filter(o => {
+          const d = o.created_at?.split('T')[0]
+          return d && d >= periodStart && d <= periodEnd && o.order_type !== 'terrain'
+        }).reduce((sum, o) => sum + (o.total || 0), 0)
 
         // Period reservations count (confirmed + paid)
         const periodReservations = periodRes.filter(r => 
@@ -158,6 +174,7 @@ export default function DashboardPage() {
         setStats({
           paidRevenue,
           totalReserved,
+          caisseRevenue,
           periodExpenses,
           periodReservations,
           pendingReservations: pendingCount,
@@ -332,51 +349,53 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 3. Caisse (Placeholder) */}
-        <div className="bg-white rounded-xl p-5 border border-neutral-200 hover:shadow-md transition-shadow relative overflow-hidden">
-          <div className="absolute inset-0 bg-neutral-50/80 backdrop-blur-[1px] flex items-center justify-center z-10">
-            <span className="text-xs font-medium text-neutral-400 bg-white px-3 py-1.5 rounded-full border border-neutral-200">
-              Bientôt disponible
-            </span>
-          </div>
+        {/* 3. Caisse */}
+        <div className="bg-white rounded-xl p-5 border border-neutral-200 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
             <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
               <Monitor className="h-5 w-5 text-purple-600" />
             </div>
           </div>
           <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium mb-1">Caisse</p>
-          <p className="text-2xl font-bold text-neutral-300">— F</p>
+          <p className="text-2xl font-bold text-purple-600">{formatCurrency(stats?.caisseRevenue || 0)}</p>
           <div className="mt-2 pt-2 border-t border-neutral-100">
-            <p className="text-xs text-neutral-400">Fonctionnalité à venir</p>
+            <Link href="/caisse" className="text-xs text-purple-600 hover:text-purple-700 font-medium">
+              Ouvrir la caisse →
+            </Link>
           </div>
         </div>
 
-        {/* 4. Fond Net = Padel payé - Dépenses */}
-        <div className="bg-white rounded-xl p-5 border border-neutral-200 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <div className={cn(
-              "h-10 w-10 rounded-lg flex items-center justify-center",
-              (stats?.paidRevenue || 0) - (stats?.periodExpenses || 0) >= 0 ? "bg-emerald-100" : "bg-orange-100"
-            )}>
-              <Banknote className={cn(
-                "h-5 w-5",
-                (stats?.paidRevenue || 0) - (stats?.periodExpenses || 0) >= 0 ? "text-emerald-600" : "text-orange-600"
-              )} />
+        {/* 4. Fond Net = Padel + Caisse - Dépenses */}
+        {(() => {
+          const fondNet = (stats?.paidRevenue || 0) + (stats?.caisseRevenue || 0) - (stats?.periodExpenses || 0)
+          return (
+            <div className="bg-white rounded-xl p-5 border border-neutral-200 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <div className={cn(
+                  "h-10 w-10 rounded-lg flex items-center justify-center",
+                  fondNet >= 0 ? "bg-emerald-100" : "bg-orange-100"
+                )}>
+                  <Banknote className={cn(
+                    "h-5 w-5",
+                    fondNet >= 0 ? "text-emerald-600" : "text-orange-600"
+                  )} />
+                </div>
+              </div>
+              <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium mb-1">Fond Net</p>
+              <p className={cn(
+                "text-2xl font-bold",
+                fondNet >= 0 ? "text-emerald-600" : "text-orange-600"
+              )}>
+                {fondNet >= 0 ? '+' : ''}{formatCurrency(fondNet)}
+              </p>
+              <div className="mt-2 pt-2 border-t border-neutral-100">
+                <p className="text-xs text-neutral-500">
+                  Padel + Caisse - Dépenses
+                </p>
+              </div>
             </div>
-          </div>
-          <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium mb-1">Fond Net</p>
-          <p className={cn(
-            "text-2xl font-bold",
-            (stats?.paidRevenue || 0) - (stats?.periodExpenses || 0) >= 0 ? "text-emerald-600" : "text-orange-600"
-          )}>
-            {(stats?.paidRevenue || 0) - (stats?.periodExpenses || 0) >= 0 ? '+' : ''}{formatCurrency((stats?.paidRevenue || 0) - (stats?.periodExpenses || 0))}
-          </p>
-          <div className="mt-2 pt-2 border-t border-neutral-100">
-            <p className="text-xs text-neutral-500">
-              Padel payé - Dépenses
-            </p>
-          </div>
-        </div>
+          )
+        })()}
       </div>
 
       {/* Occupation par créneau aujourd'hui */}

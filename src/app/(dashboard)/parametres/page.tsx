@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Settings, Building2, Clock, CreditCard, Bell, Save, Check, Wallet, GripVertical, Lock, ShoppingBag, LayoutGrid, Plus, Pencil, Trash2, X, Circle, Square, RectangleHorizontal, Users } from "lucide-react"
+import { Settings, Building2, Clock, CreditCard, Bell, Save, Check, Wallet, GripVertical, Lock, ShoppingBag, LayoutGrid, Plus, Pencil, Trash2, X, Circle, Square, RectangleHorizontal, Users, Keyboard } from "lucide-react"
+import { useVirtualKeyboardEnabled } from "@/components/ui/virtual-keyboard"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -79,6 +80,7 @@ export default function ParametresPage() {
   const [tableModal, setTableModal] = useState<{ type: 'create' | 'edit'; table?: PosTable } | null>(null)
   const [tableForm, setTableForm] = useState({ name: '', capacity: '2', shape: 'round' as 'round' | 'square' | 'rectangle' })
   const [isSavingTable, setIsSavingTable] = useState(false)
+  const [vkEnabled, setVkEnabled] = useVirtualKeyboardEnabled()
   const supabase = createClient()
 
   const loadSettings = async () => {
@@ -482,9 +484,39 @@ export default function ParametresPage() {
                     </div>
                   </div>
 
+                  <div className="pt-4 border-t border-neutral-200">
+                    <h4 className="text-sm font-semibold text-neutral-950 mb-4 flex items-center gap-2">
+                      <Keyboard className="h-4 w-4" />
+                      Clavier virtuel
+                    </h4>
+                    <label className="flex items-center justify-between p-4 rounded-lg border border-neutral-200 cursor-pointer hover:bg-neutral-50 transition-colors">
+                      <div>
+                        <p className="text-sm font-medium text-neutral-950">Clavier automatique</p>
+                        <p className="text-xs text-neutral-500">Afficher un clavier virtuel à l&apos;écran lorsqu&apos;un champ est sélectionné en caisse</p>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={vkEnabled}
+                          onChange={(e) => setVkEnabled(e.target.checked)}
+                          className="sr-only"
+                        />
+                        <div className={cn(
+                          "w-11 h-6 rounded-full transition-colors",
+                          vkEnabled ? "bg-neutral-950" : "bg-neutral-200"
+                        )}>
+                          <div className={cn(
+                            "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm",
+                            vkEnabled && "translate-x-5"
+                          )} />
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
                   <div className="p-4 bg-neutral-50 rounded-lg">
                     <p className="text-sm text-neutral-600">
-                      <strong>Note :</strong> Les produits existants ne seront pas affectés par ce changement. Seuls les nouveaux produits utiliseront ce taux par défaut.
+                      <strong>Note :</strong> Les produits existants ne seront pas affectés par le changement de taux de taxe. Le clavier virtuel est sauvegardé localement sur cet appareil.
                     </p>
                   </div>
                 </div>

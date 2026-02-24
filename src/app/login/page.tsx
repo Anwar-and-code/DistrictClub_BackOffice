@@ -27,7 +27,7 @@ export default function LoginPage() {
       }
 
       storeEmployee(employee)
-      router.push("/")
+      router.push(employee.base_route || "/")
     } catch {
       toast.error("Une erreur est survenue")
     } finally {
