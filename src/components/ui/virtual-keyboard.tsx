@@ -153,17 +153,21 @@ export default function VirtualKeyboard({ enabled = true }: VirtualKeyboardProps
     // Keep focus on the original input
     input.focus()
 
-    const start = input.selectionStart ?? input.value.length
-    const end = input.selectionEnd ?? input.value.length
+    const supportsSelection = input.type !== "number" && input.type !== "email"
+    const start = supportsSelection ? (input.selectionStart ?? input.value.length) : input.value.length
+    const end = supportsSelection ? (input.selectionEnd ?? input.value.length) : input.value.length
     const val = input.value
+    const safeSetSelection = (s: number, e: number) => {
+      if (supportsSelection) requestAnimationFrame(() => input.setSelectionRange(s, e))
+    }
 
     if (key === "BACKSPACE") {
       if (start !== end) {
         setNativeInputValue(input, val.slice(0, start) + val.slice(end))
-        requestAnimationFrame(() => input.setSelectionRange(start, start))
+        safeSetSelection(start, start)
       } else if (start > 0) {
         setNativeInputValue(input, val.slice(0, start - 1) + val.slice(start))
-        requestAnimationFrame(() => input.setSelectionRange(start - 1, start - 1))
+        safeSetSelection(start - 1, start - 1)
       }
     } else if (key === "CLEAR") {
       setNativeInputValue(input, "")
@@ -172,11 +176,11 @@ export default function VirtualKeyboard({ enabled = true }: VirtualKeyboardProps
     } else if (key === "SPACE") {
       const nv = val.slice(0, start) + " " + val.slice(end)
       setNativeInputValue(input, nv)
-      requestAnimationFrame(() => input.setSelectionRange(start + 1, start + 1))
+      safeSetSelection(start + 1, start + 1)
     } else {
       const nv = val.slice(0, start) + key + val.slice(end)
       setNativeInputValue(input, nv)
-      requestAnimationFrame(() => input.setSelectionRange(start + 1, start + 1))
+      safeSetSelection(start + 1, start + 1)
       // Auto-lowercase after one uppercase letter
       if (shifted) setShifted(false)
     }

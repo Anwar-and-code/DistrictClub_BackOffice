@@ -63,3 +63,35 @@ export type TransactionFormData = z.infer<typeof transactionSchema>;
 export type EmployeeLoginFormData = z.infer<typeof employeeLoginSchema>;
 export type TimeSlotFormData = z.infer<typeof timeSlotSchema>;
 export type TerrainFormData = z.infer<typeof terrainSchema>;
+
+export const eventSchema = z.object({
+  title: z
+    .string()
+    .min(1, "Le titre est requis")
+    .max(200, "Le titre ne peut pas dépasser 200 caractères"),
+  subtitle: z.string().optional().nullable(),
+  description: z
+    .string()
+    .min(1, "La description est requise"),
+  long_description: z.string().optional().nullable(),
+  category: z.enum(["TOURNOI", "FORMATION", "SOCIAL", "ANIMATION", "COMPETITION", "AUTRE"], {
+    message: "La catégorie est requise",
+  }),
+  status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED", "COMPLETED"], {
+    message: "Le statut est requis",
+  }),
+  start_date: z.string().min(1, "La date de début est requise"),
+  end_date: z.string().optional().nullable(),
+  location: z
+    .string()
+    .min(1, "Le lieu est requis"),
+  cover_image_url: z.string().optional().nullable(),
+  is_featured: z.boolean().optional(),
+  display_order: z.number().int().optional(),
+  tags: z.array(z.string()).optional().nullable(),
+  price_info: z.string().optional().nullable(),
+  is_free: z.boolean().optional(),
+  contact_phone: z.string().optional().nullable(),
+});
+
+export type EventFormData = z.infer<typeof eventSchema>;

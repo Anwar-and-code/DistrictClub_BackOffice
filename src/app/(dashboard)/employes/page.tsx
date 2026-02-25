@@ -86,7 +86,7 @@ export default function EmployesPage() {
     try {
       const [empRes, profRes, permRes] = await Promise.all([
         supabase.from('employees').select('*').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*').order('hierarchy_level'),
+        supabase.from('employee_profiles').select('*').order('hierarchy_level'),
         supabase.from('permissions').select('*').order('sort_order'),
       ])
       if (empRes.error) throw empRes.error
@@ -95,9 +95,9 @@ export default function EmployesPage() {
       setEmployees(empRes.data || [])
       setProfiles(profRes.data || [])
       setAllPermissions(permRes.data || [])
-    } catch (error) {
-      console.error(error)
-      toast.error("Erreur lors du chargement")
+    } catch (error: any) {
+      console.error("loadData error:", error?.message || error?.code || JSON.stringify(error))
+      toast.error(error?.message || "Erreur lors du chargement")
     } finally {
       setIsLoading(false)
     }
@@ -267,7 +267,7 @@ export default function EmployesPage() {
 
       if (profileModal?.profile) {
         profileId = profileModal.profile.id
-        const { error } = await supabase.from('profiles').update({
+        const { error } = await supabase.from('employee_profiles').update({
           name: profileForm.name,
           display_name: profileForm.display_name,
           description: profileForm.description || null,
@@ -276,7 +276,7 @@ export default function EmployesPage() {
         }).eq('id', profileId)
         if (error) throw error
       } else {
-        const { data, error } = await supabase.from('profiles').insert({
+        const { data, error } = await supabase.from('employee_profiles').insert({
           name: profileForm.name.toLowerCase().replace(/\s+/g, '_'),
           display_name: profileForm.display_name,
           description: profileForm.description || null,
@@ -318,7 +318,7 @@ export default function EmployesPage() {
       return
     }
     try {
-      const { error } = await supabase.from('profiles').delete().eq('id', deleteProfileModal.id)
+      const { error } = await supabase.from('employee_profiles').delete().eq('id', deleteProfileModal.id)
       if (error) throw error
       toast.success("Profil supprimé")
       setDeleteProfileModal(null)

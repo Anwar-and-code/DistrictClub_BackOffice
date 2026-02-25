@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ChevronDown,
   UserCog,
-  BarChart3,
   Settings,
   Wallet,
   ShoppingBag,
@@ -19,6 +18,10 @@ import {
   List,
   ShoppingCart,
   ArrowLeftRight,
+  CalendarDays,
+  FileBarChart,
+  Receipt,
+  PackageSearch,
 } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
 import Link from "next/link"
@@ -59,6 +62,7 @@ const gestionItems: NavItem[] = [
   { title: "Courts", url: "/terrains", icon: MapPin, permission: PERMISSIONS.TERRAINS_VIEW },
   { title: "Créneaux", url: "/creneaux", icon: Clock, permission: PERMISSIONS.CRENEAUX_VIEW },
   { title: "Joueurs", url: "/joueurs", icon: Users, permission: PERMISSIONS.JOUEURS_VIEW },
+  { title: "Événements", url: "/evenements", icon: CalendarDays, permission: PERMISSIONS.EVENEMENTS_VIEW },
   {
     title: "Produits",
     icon: Package,
@@ -75,7 +79,16 @@ const gestionItems: NavItem[] = [
 const adminItems: NavItem[] = [
   { title: "Employés", url: "/employes", icon: UserCog, permission: PERMISSIONS.EMPLOYES_VIEW },
   { title: "Dépenses", url: "/depenses", icon: Wallet, permission: PERMISSIONS.DEPENSES_VIEW },
-  { title: "Statistiques", url: "/statistiques", icon: BarChart3, permission: PERMISSIONS.STATISTIQUES_VIEW },
+  {
+    title: "Rapports",
+    icon: FileBarChart,
+    basePath: "/rapports",
+    permission: PERMISSIONS.DEPENSES_VIEW,
+    children: [
+      { title: "Caisse", url: "/rapports/caisse", icon: Receipt },
+      { title: "Produits", url: "/rapports/produits", icon: PackageSearch },
+    ],
+  },
   { title: "Paramètres", url: "/parametres", icon: Settings, permission: PERMISSIONS.PARAMETRES_MANAGE },
 ]
 

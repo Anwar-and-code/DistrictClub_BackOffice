@@ -67,7 +67,7 @@ export default function DashboardPage() {
           supabase.from('terrains').select('id, code, is_active').eq('is_active', true),
           supabase.from('time_slots').select('id, start_time, end_time, price'),
           supabase.from('products').select('id, name, quantity, stock_threshold'),
-          supabase.from('pos_orders').select('total, created_at, status, order_type').eq('status', 'completed'),
+          supabase.from('pos_orders').select('total, created_at, status, order_type, reservation_id, time_slot:time_slots(price)').eq('status', 'completed'),
           supabase.from('pos_expenses').select('amount, created_at')
         ])
 
@@ -110,11 +110,22 @@ export default function DashboardPage() {
             return d && d >= periodStart && d <= periodEnd
           }).reduce((sum, e) => sum + (e.amount || 0), 0)
 
-        // Caisse revenue (POS orders excluding terrain, which is already counted in Padel)
+        // Caisse revenue (POS orders)
+        // All pos_orders product totals are counted here (table + terrain)
+        // paidRevenue only counts reservation slot prices, not product totals
+        // For terrain orders WITHOUT reservation, also add the slot price (not counted in Padel)
         const caisseRevenue = (posOrders || []).filter(o => {
           const d = o.created_at?.split('T')[0]
-          return d && d >= periodStart && d <= periodEnd && o.order_type !== 'terrain'
-        }).reduce((sum, o) => sum + (o.total || 0), 0)
+          return d && d >= periodStart && d <= periodEnd
+        }).reduce((sum, o) => {
+          let amount = o.total || 0
+          // For terrain orders without reservation, also add the slot price
+          if (o.order_type === 'terrain' && !o.reservation_id) {
+            const slot = o.time_slot as { price?: number } | null
+            amount += slot?.price || 0
+          }
+          return sum + amount
+        }, 0)
 
         // Period reservations count (confirmed + paid)
         const periodReservations = periodRes.filter(r => 

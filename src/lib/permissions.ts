@@ -20,8 +20,9 @@ export const PERMISSIONS = {
   DEPENSES_MANAGE:     'depenses.manage',
   EMPLOYES_VIEW:       'employes.view',
   EMPLOYES_MANAGE:     'employes.manage',
-  STATISTIQUES_VIEW:   'statistiques.view',
   PARAMETRES_MANAGE:   'parametres.manage',
+  EVENEMENTS_VIEW:     'evenements.view',
+  EVENEMENTS_MANAGE:   'evenements.manage',
 } as const
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
@@ -63,8 +64,8 @@ export const PERMISSION_CATEGORIES = [
   { key: 'Produits',      label: 'Produits' },
   { key: 'Dépenses',      label: 'Dépenses' },
   { key: 'Employés',      label: 'Employés' },
-  { key: 'Statistiques',  label: 'Statistiques' },
   { key: 'Paramètres',    label: 'Paramètres' },
+  { key: 'Événements',    label: 'Événements' },
 ] as const
 
 // Routes disponibles pour base_route
@@ -77,7 +78,7 @@ export const AVAILABLE_ROUTES = [
   { value: '/joueurs',       label: 'Joueurs' },
   { value: '/produits',      label: 'Produits' },
   { value: '/depenses',      label: 'Dépenses' },
-  { value: '/statistiques',  label: 'Statistiques' },
+  { value: '/evenements',    label: 'Événements' },
 ] as const
 
 // Map route → permission requise pour y accéder
@@ -91,8 +92,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/produits':      PERMISSIONS.PRODUITS_VIEW,
   '/depenses':      PERMISSIONS.DEPENSES_VIEW,
   '/employes':      PERMISSIONS.EMPLOYES_VIEW,
-  '/statistiques':  PERMISSIONS.STATISTIQUES_VIEW,
   '/parametres':    PERMISSIONS.PARAMETRES_MANAGE,
+  '/evenements':    PERMISSIONS.EVENEMENTS_VIEW,
 }
 
 // Helper : vérifie si l'utilisateur a une permission

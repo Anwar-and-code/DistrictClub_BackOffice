@@ -73,3 +73,39 @@ export interface AvailableSlot {
   reservation_id: number | null
   reservation_status: ReservationStatus | null
 }
+
+export type EventCategory = 'TOURNOI' | 'FORMATION' | 'SOCIAL' | 'ANIMATION' | 'COMPETITION' | 'AUTRE'
+
+export type EventStatus = 'DRAFT' | 'PUBLISHED' | 'CANCELLED' | 'COMPLETED'
+
+export interface EventImage {
+  id: string
+  event_id: string
+  image_url: string
+  caption: string | null
+  display_order: number
+}
+
+export interface Event {
+  id: string
+  title: string
+  subtitle: string | null
+  description: string
+  long_description: string | null
+  category: EventCategory
+  status: EventStatus
+  start_date: string
+  end_date: string | null
+  location: string
+  cover_image_url: string | null
+  is_featured: boolean
+  display_order: number
+  tags: string[] | null
+  price_info: string | null
+  is_free: boolean
+  contact_phone: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  event_images?: EventImage[]
+}

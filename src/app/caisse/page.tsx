@@ -96,6 +96,7 @@ interface PosOrder {
   client_name: string | null
   client_phone: string | null
   created_at: string
+  payment_details?: { method_name: string; payment_method_id: number; amount: number; amount_received: number; amount_returned: number }[] | null
   table?: { name: string } | null
   terrain?: { code: string } | null
   time_slot?: { start_time: string; end_time: string; price?: number } | null
@@ -366,31 +367,60 @@ export default function CaissePage() {
     setOccupiedTableIds(tIds)
   }, [])
 
+  // ─── Load active reservations (today, CONFIRMED/PAID) ───────────
+  const loadActiveReservations = useCallback(async () => {
+    const today = new Date().toISOString().split("T")[0]
+    const { data } = await supabase
+      .from("reservations")
+      .select(`
+        id, reservation_date, status, created_at, terrain_id, time_slot_id, user_id, client_id,
+        terrain:terrains(id, code),
+        time_slot:time_slots(id, start_time, end_time, price),
+        user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
+        client:clients(id, full_name, phone)
+      `)
+      .eq("reservation_date", today)
+      .in("status", ["CONFIRMED", "PAID"])
+      .order("time_slot_id")
+    setActiveReservations((data || []) as unknown as ActiveReservation[])
+  }, [])
+
   const loadAllOrderPayments = useCallback(async (orders: PosOrder[]) => {
     const result: Record<number, { method_name: string; amount: number }[]> = {}
     if (orders.length === 0) { setAllOrderPayments(result); return }
 
-    const orderIds = orders.map((o) => o.id)
-
-    // Try pos_order_payments first
-    const { data: opData } = await supabase
-      .from("pos_order_payments")
-      .select("order_id, amount, payment_method:payment_methods(name)")
-      .in("order_id", orderIds)
-
-    if (opData && opData.length > 0) {
-      for (const row of opData) {
-        const oid = row.order_id as number
-        if (!result[oid]) result[oid] = []
-        const pm = row.payment_method as unknown as { name: string } | null
-        result[oid].push({
-          method_name: pm?.name || "Inconnu",
-          amount: row.amount as number,
-        })
+    // 1) First: use payment_details JSONB from orders (most reliable)
+    for (const order of orders) {
+      if (order.payment_details && Array.isArray(order.payment_details) && order.payment_details.length > 0) {
+        result[order.id] = order.payment_details.map((p) => ({
+          method_name: p.method_name || "Inconnu",
+          amount: p.amount || 0,
+        }))
       }
     }
 
-    // For terrain orders without pos_order_payments data, try reservation_payments
+    // 2) For orders without payment_details JSONB, try pos_order_payments table
+    const missingIds = orders.filter((o) => !result[o.id]).map((o) => o.id)
+    if (missingIds.length > 0) {
+      const { data: opData } = await supabase
+        .from("pos_order_payments")
+        .select("order_id, amount, payment_method:payment_methods(name)")
+        .in("order_id", missingIds)
+
+      if (opData && opData.length > 0) {
+        for (const row of opData) {
+          const oid = row.order_id as number
+          if (!result[oid]) result[oid] = []
+          const pm = row.payment_method as unknown as { name: string } | null
+          result[oid].push({
+            method_name: pm?.name || "Inconnu",
+            amount: row.amount as number,
+          })
+        }
+      }
+    }
+
+    // 3) For terrain orders still missing, try reservation_payments
     const terrainOrders = orders.filter((o) => o.reservation_id && !result[o.id])
     if (terrainOrders.length > 0) {
       const resIds = terrainOrders.map((o) => o.reservation_id as number)
@@ -400,7 +430,6 @@ export default function CaissePage() {
         .in("reservation_id", resIds)
 
       if (rpData && rpData.length > 0) {
-        // Map reservation_id back to order_id
         const resIdToOrderId: Record<number, number> = {}
         terrainOrders.forEach((o) => { if (o.reservation_id) resIdToOrderId[o.reservation_id] = o.id })
 
@@ -417,13 +446,17 @@ export default function CaissePage() {
       }
     }
 
-    // For orders with no payment detail loaded, create entry from order.payment_method
+    // 4) Last resort: single entry from order.payment_method
     for (const order of orders) {
       if (!result[order.id]) {
-        const pmMap: Record<string, string> = { cash: "Espèces", card: "Carte", mobile_money: "Mobile", mobile: "Mobile" }
-        // For 'mixed' orders without detail, attribute to dominant method name from pmMap
+        const pmMap: Record<string, string> = { cash: "Espèces", card: "Carte", mobile_money: "Mobile", mobile: "Mobile", mixed: "Paiement multiple" }
         const methodName = pmMap[order.payment_method] || order.payment_method || "Espèces"
-        result[order.id] = [{ method_name: methodName, amount: order.total }]
+        let total = order.total
+        if (order.order_type === "terrain" && order.time_slot) {
+          const slot = order.time_slot as unknown as { price?: number }
+          total += slot.price || 0
+        }
+        result[order.id] = [{ method_name: methodName, amount: total }]
       }
     }
 
@@ -611,26 +644,57 @@ export default function CaissePage() {
       }
     }
 
-    // Load payment details
-    const { data: orderPmts } = await supabase
-      .from("pos_order_payments")
-      .select("payment_method_id, amount, amount_received, amount_returned, payment_method:payment_methods(name)")
-      .eq("order_id", order.id)
-    if (orderPmts && orderPmts.length > 0) {
-      setSelectedTicketPayments(orderPmts.map((p: Record<string, unknown>) => {
+    // Load payment details — try multiple sources in priority order
+    // 1) payment_details JSONB on pos_orders (most reliable, always saved with the order)
+    if (order.payment_details && Array.isArray(order.payment_details) && order.payment_details.length > 0) {
+      setSelectedTicketPayments(order.payment_details.map((p) => ({
+        method_name: p.method_name || "Inconnu",
+        amount: p.amount || 0,
+        amount_received: p.amount_received || p.amount || 0,
+        amount_returned: p.amount_returned || 0,
+      })))
+    } else {
+      // 2) Try pos_order_payments table
+      const mapPmtRow = (p: Record<string, unknown>) => {
         const pm = p.payment_method as unknown as { name: string } | null
-        return { method_name: pm?.name || "Inconnu", amount: p.amount as number, amount_received: p.amount_received as number, amount_returned: p.amount_returned as number }
-      }))
-    } else if (order.reservation_id) {
-      const { data: resPmts } = await supabase
-        .from("reservation_payments")
+        return {
+          method_name: pm?.name || "Inconnu",
+          amount: (p.amount as number) || 0,
+          amount_received: (p.amount_received as number) || (p.amount as number) || 0,
+          amount_returned: (p.amount_returned as number) || 0,
+        }
+      }
+
+      let { data: orderPmts } = await supabase
+        .from("pos_order_payments")
         .select("payment_method_id, amount, amount_received, amount_returned, payment_method:payment_methods(name)")
-        .eq("reservation_id", order.reservation_id)
-      if (resPmts && resPmts.length > 0) {
-        setSelectedTicketPayments(resPmts.map((p: Record<string, unknown>) => {
-          const pm = p.payment_method as unknown as { name: string } | null
-          return { method_name: pm?.name || "Inconnu", amount: p.amount as number, amount_received: p.amount_received as number, amount_returned: p.amount_returned as number }
-        }))
+        .eq("order_id", order.id)
+      if (!orderPmts) {
+        const { data: basicPmts } = await supabase
+          .from("pos_order_payments")
+          .select("payment_method_id, amount, payment_method:payment_methods(name)")
+          .eq("order_id", order.id)
+        orderPmts = basicPmts as any
+      }
+
+      if (orderPmts && orderPmts.length > 0) {
+        setSelectedTicketPayments(orderPmts.map(mapPmtRow))
+      } else if (order.reservation_id) {
+        // 3) Try reservation_payments
+        let { data: resPmts } = await supabase
+          .from("reservation_payments")
+          .select("payment_method_id, amount, amount_received, amount_returned, payment_method:payment_methods(name)")
+          .eq("reservation_id", order.reservation_id)
+        if (!resPmts) {
+          const { data: basicRes } = await supabase
+            .from("reservation_payments")
+            .select("payment_method_id, amount, payment_method:payment_methods(name)")
+            .eq("reservation_id", order.reservation_id)
+          resPmts = basicRes as any
+        }
+        if (resPmts && resPmts.length > 0) {
+          setSelectedTicketPayments(resPmts.map(mapPmtRow))
+        }
       }
     }
   }
@@ -696,7 +760,8 @@ export default function CaissePage() {
     loadData()
     loadTodayOrders()
     loadPendingOrders()
-  }, [loadData, loadTodayOrders, loadPendingOrders])
+    loadActiveReservations()
+  }, [loadData, loadTodayOrders, loadPendingOrders, loadActiveReservations])
 
   // ─── Cart Logic ──────────────────────────────────────────────────
   const addToCart = (product: PosProduct) => {
@@ -771,10 +836,12 @@ export default function CaissePage() {
     const sessionOrders = todayOrders.filter(
       (o) => new Date(o.created_at) >= new Date(currentSession.opened_at)
     )
-    const cashSales = sessionOrders
-      .filter((o) => o.payment_method === "cash")
-      .reduce((sum, o) => sum + o.total, 0)
-    const expectedAmount = currentSession.opening_amount + cashSales
+    const totalProductSales = sessionOrders.reduce((sum, o) => sum + o.total, 0)
+    const totalReservationSales = sessionOrders
+      .filter((o) => o.order_type === "terrain")
+      .reduce((sum, o) => sum + getOrderSlotPrice(o), 0)
+    const expensesTotal = sessionExpenses.reduce((sum, e) => sum + e.amount, 0)
+    const expectedAmount = currentSession.opening_amount + totalProductSales + totalReservationSales - expensesTotal
 
     try {
       const { error } = await supabase
@@ -894,24 +961,6 @@ export default function CaissePage() {
     } finally {
       setIsProcessing(false)
     }
-  }
-
-  // ─── Load active reservations (today, CONFIRMED/PAID) ───────────
-  const loadActiveReservations = async () => {
-    const today = new Date().toISOString().split("T")[0]
-    const { data } = await supabase
-      .from("reservations")
-      .select(`
-        id, reservation_date, status, created_at, terrain_id, time_slot_id, user_id, client_id,
-        terrain:terrains(id, code),
-        time_slot:time_slots(id, start_time, end_time, price),
-        user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
-        client:clients(id, full_name, phone)
-      `)
-      .eq("reservation_date", today)
-      .in("status", ["CONFIRMED", "PAID"])
-      .order("time_slot_id")
-    setActiveReservations((data || []) as unknown as ActiveReservation[])
   }
 
   // ─── Shared: decrement stock + log movements ───────────────────
@@ -1054,7 +1103,24 @@ export default function CaissePage() {
     )
     setShowTablePicker(false)
     if (existing) {
-      await appendToPendingOrder(existing)
+      // If cart has items, append them first then open pay modal
+      if (cart.length > 0) {
+        await appendToPendingOrder(existing)
+        // Reload the order with updated total
+        const { data: refreshed } = await supabase
+          .from("pos_orders")
+          .select("*, table:pos_tables(name), terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)")
+          .eq("id", existing.id)
+          .single()
+        if (refreshed) {
+          await openPayModal(refreshed as PosOrder)
+        } else {
+          await openPayModal(existing)
+        }
+      } else {
+        // No cart items — directly open encaissement
+        await openPayModal(existing)
+      }
     } else {
       const num = await createPendingOrder({
         order_type: "table",
@@ -1248,19 +1314,43 @@ export default function CaissePage() {
       const totalReceived = orderPayments.reduce((s, p) => s + p.amount_received, 0)
       const totalReturned = orderPayments.reduce((s, p) => s + p.amount_returned, 0)
 
+      // Build payment_details JSON for guaranteed storage on the order itself
+      const paymentDetailsJson = orderPayments.map((p) => ({
+        method_name: getPayMethodName(p.payment_method_id),
+        payment_method_id: p.payment_method_id,
+        amount: p.amount,
+        amount_received: p.amount_received,
+        amount_returned: p.amount_returned,
+      }))
+
+      // Update order: status + payment info + payment_details JSONB
+      const updatePayload: Record<string, unknown> = {
+        status: "completed",
+        payment_method: primaryMethod,
+        cash_received: totalReceived || null,
+        change_given: totalReturned || null,
+        payment_details: paymentDetailsJson,
+      }
       const { error } = await supabase
         .from("pos_orders")
-        .update({
-          status: "completed",
-          payment_method: primaryMethod,
-          cash_received: totalReceived || null,
-          change_given: totalReturned || null,
-        })
+        .update(updatePayload)
         .eq("id", payingOrder.id)
 
-      if (error) throw error
+      if (error) {
+        // If payment_details column doesn't exist yet, retry without it
+        const { error: err2 } = await supabase
+          .from("pos_orders")
+          .update({
+            status: "completed",
+            payment_method: primaryMethod,
+            cash_received: totalReceived || null,
+            change_given: totalReturned || null,
+          })
+          .eq("id", payingOrder.id)
+        if (err2) throw err2
+      }
 
-      // Save payment details to pos_order_payments
+      // Also save to pos_order_payments table (best-effort, for relational queries)
       for (const payment of orderPayments) {
         const { error: popErr } = await supabase.from("pos_order_payments").insert({
           order_id: payingOrder.id,
@@ -1269,7 +1359,14 @@ export default function CaissePage() {
           amount_received: payment.amount_received,
           amount_returned: payment.amount_returned,
         })
-        if (popErr) console.warn("pos_order_payments insert:", popErr)
+        if (popErr) {
+          // Retry with basic columns if extra columns don't exist
+          await supabase.from("pos_order_payments").insert({
+            order_id: payingOrder.id,
+            payment_method_id: payment.payment_method_id,
+            amount: payment.amount,
+          })
+        }
       }
 
       // Settle linked reservation if requested
@@ -1289,7 +1386,13 @@ export default function CaissePage() {
                 amount_received: resAmount,
                 amount_returned: 0,
               })
-              if (rpErr) console.warn("reservation_payments insert:", rpErr)
+              if (rpErr) {
+                await supabase.from("reservation_payments").insert({
+                  reservation_id: payingOrder.reservation_id,
+                  payment_method_id: payment.payment_method_id,
+                  amount: resAmount,
+                })
+              }
             }
           }
         }
@@ -1304,6 +1407,7 @@ export default function CaissePage() {
       setPayingOrderItems([])
       loadTodayOrders()
       loadPendingOrders()
+      loadActiveReservations()
 
       const msgs: string[] = [`${payingOrder.order_number} encaissé`]
       if (totalReturned > 0) msgs.push(`Monnaie: ${formatCurrency(totalReturned)}`)
@@ -1356,6 +1460,7 @@ export default function CaissePage() {
 
       loadData()
       loadPendingOrders()
+      loadActiveReservations()
       toast.success(`Commande ${order.order_number} annulée`)
     } catch (error) {
       console.error(error)
@@ -1478,9 +1583,13 @@ export default function CaissePage() {
     .reduce((sum, o) => sum + getOrderSlotPrice(o), 0)
   const todayExpensesTotal = sessionExpenses.reduce((sum, e) => sum + e.amount, 0)
   const todayTotal = todayTerrainTotal + todayCaisseTotal - todayExpensesTotal
-  const todayCash = todayOrders
+  const todayCashCaisse = todayOrders
     .filter((o) => o.payment_method === "cash")
     .reduce((sum, o) => sum + o.total, 0)
+  const todayCashReservation = todayOrders
+    .filter((o) => o.payment_method === "cash" && o.order_type === "terrain")
+    .reduce((sum, o) => sum + getOrderSlotPrice(o), 0)
+  const todayCash = todayCashCaisse + todayCashReservation
 
   // Real payment breakdown from loaded per-order payment details
   const realPaymentBreakdown = Object.values(allOrderPayments).flat().reduce((acc, p) => {
@@ -1607,7 +1716,7 @@ export default function CaissePage() {
   // ═══════════════════════════════════════════════════════════════════
   return (
     <div className="h-screen bg-neutral-100 flex flex-col overflow-hidden">
-      {/* ─── MAIN AREA: Cart Left + Products Right ──────────────────── */}
+      {/* ─── MAIN AREA: Cart Left + Products Right ──────────────── */}
       <div className="flex-1 flex overflow-hidden">
         {/* ═══ LEFT: CART / TICKET ═══════════════════════════════════ */}
         <div className="w-[380px] bg-neutral-900 flex flex-col border-r border-neutral-800">
@@ -1719,8 +1828,14 @@ export default function CaissePage() {
                   setShowTablePicker(true)
                 }}
                 disabled={posTables.length === 0}
-                className="flex-1 py-3.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="relative flex-1 py-3.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
+                {pendingOrders.filter(o => o.order_type === "table").length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                  </span>
+                )}
                 <ClipboardList className="h-4 w-4" />
                 Table
               </button>
@@ -1730,8 +1845,14 @@ export default function CaissePage() {
                   loadPendingOrders()
                   setShowTerrainModal(true)
                 }}
-                className="flex-1 py-3.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                className="relative flex-1 py-3.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
               >
+                {(pendingOrders.filter(o => o.order_type === "terrain").length + activeReservations.filter(r => r.status === "CONFIRMED" && !pendingOrders.some(o => o.reservation_id === r.id)).length) > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                  </span>
+                )}
                 <MapPin className="h-4 w-4" />
                 Terrain
               </button>
@@ -1879,7 +2000,7 @@ export default function CaissePage() {
 
       {/* ─── BOTTOM BAR ──────────────────────────────────────────────── */}
       <div className="h-[48px] bg-neutral-900 flex items-center justify-between px-3 border-t border-neutral-800">
-        {/* Left: Back-office + Dépenses + Commandes + Historique */}
+        {/* Left: Back-office + Dépenses + Réservation + Historique */}
         <div className="flex items-center gap-1">
           <Link
             href="/"
@@ -1896,20 +2017,6 @@ export default function CaissePage() {
             className="px-3 py-1.5 text-xs font-semibold text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors"
           >
             Dépenses
-          </button>
-          <button
-            onClick={() => {
-              loadPendingOrders()
-              setShowPending(true)
-            }}
-            className="relative px-3 py-1.5 text-xs font-semibold text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors"
-          >
-            Commandes
-            {pendingOrders.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] px-1 flex items-center justify-center text-[10px] font-bold text-white bg-blue-500 rounded-full">
-                {pendingOrders.length}
-              </span>
-            )}
           </button>
           <button
             onClick={() => {
@@ -2931,9 +3038,21 @@ export default function CaissePage() {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Ventes espèces</span>
+                <span className="text-neutral-500">Vente caisse</span>
                 <span className="font-medium text-emerald-600">
-                  +{formatCurrency(todayCash)}
+                  +{formatCurrency(todayCaisseTotal)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Vente Réservation</span>
+                <span className="font-medium text-emerald-600">
+                  +{formatCurrency(todayTerrainTotal)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Dépenses</span>
+                <span className="font-medium text-red-600">
+                  -{formatCurrency(todayExpensesTotal)}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -2943,7 +3062,7 @@ export default function CaissePage() {
               <div className="flex justify-between border-t border-neutral-200 pt-2.5">
                 <span className="font-semibold text-neutral-700">Attendu en caisse</span>
                 <span className="font-bold text-neutral-900">
-                  {formatCurrency(currentSession.opening_amount + todayCash)}
+                  {formatCurrency(currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal)}
                 </span>
               </div>
             </div>
@@ -2967,20 +3086,20 @@ export default function CaissePage() {
                   className={cn(
                     "text-sm font-medium p-3 rounded-xl text-center",
                     parseInt(closingAmount) ===
-                      currentSession.opening_amount + todayCash
+                      currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
                       ? "bg-emerald-50 text-emerald-700"
                       : parseInt(closingAmount) <
-                          currentSession.opening_amount + todayCash
+                          currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
                         ? "bg-red-50 text-red-700"
                         : "bg-amber-50 text-amber-700"
                   )}
                 >
                   {parseInt(closingAmount) ===
-                  currentSession.opening_amount + todayCash
+                  currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
                     ? "La caisse est juste"
                     : `Écart: ${formatCurrency(
                         parseInt(closingAmount) -
-                          (currentSession.opening_amount + todayCash)
+                          (currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal)
                       )}`}
                 </div>
               )}
@@ -3214,33 +3333,36 @@ export default function CaissePage() {
                   const pmts = selectedTicketPayments.length > 0
                     ? selectedTicketPayments
                     : (allOrderPayments[selectedTicket.id] || []).map(p => ({ ...p, amount_received: p.amount, amount_returned: 0 }))
+                  const ticketGrandTotal = selectedTicket.total + (selectedTicket.order_type === "terrain" ? ticketReservationPrice : 0)
                   if (pmts.length > 0) {
-                    const totalReceived = pmts.reduce((s, p) => s + p.amount_received, 0)
-                    const totalReturned = pmts.reduce((s, p) => s + p.amount_returned, 0)
                     return (
                       <>
                         <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "3px", textTransform: "uppercase" }}>Paiement</div>
                         {pmts.map((p, i) => (
-                          <div key={i} style={{ padding: "2px 0", fontSize: "11px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between" }}><span>{p.method_name}</span><span style={{ fontWeight: "bold" }}>{formatCurrency(p.amount)}</span></div>
-                            {p.amount_received > 0 && p.amount_received !== p.amount && (
-                              <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "10px", paddingLeft: "8px" }}><span>Reçu</span><span>{formatCurrency(p.amount_received)}</span></div>
-                            )}
-                            {p.amount_returned > 0 && (
-                              <div style={{ display: "flex", justifyContent: "space-between", color: "#666", fontSize: "10px", paddingLeft: "8px" }}><span>Rendu</span><span>{formatCurrency(p.amount_returned)}</span></div>
-                            )}
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}>
+                            <span>{p.method_name}</span>
+                            <span style={{ fontWeight: "bold" }}>{formatCurrency(p.amount)}</span>
                           </div>
                         ))}
-                        <div style={{ borderTop: "1px dotted #999", margin: "4px 0" }} />
-                        <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px", fontWeight: "bold" }}><span>Montant reçu</span><span>{formatCurrency(totalReceived)}</span></div>
-                        {totalReturned > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px", color: "#666" }}><span>Montant rendu</span><span>{formatCurrency(totalReturned)}</span></div>
-                        )}
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}>
+                          <span>Rendu</span>
+                          <span>{formatCurrency(selectedTicket.change_given || 0)}</span>
+                        </div>
                       </>
                     )
                   }
                   return (
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}><span>Mode</span><span style={{ fontWeight: "bold" }}>{translatePaymentMethod(selectedTicket.payment_method)}</span></div>
+                    <>
+                      <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "3px", textTransform: "uppercase" }}>Paiement</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}>
+                        <span>{translatePaymentMethod(selectedTicket.payment_method)}</span>
+                        <span style={{ fontWeight: "bold" }}>{formatCurrency(ticketGrandTotal)}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}>
+                        <span>Rendu</span>
+                        <span>{formatCurrency(selectedTicket.change_given || 0)}</span>
+                      </div>
+                    </>
                   )
                 })()}
                 <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
@@ -3261,8 +3383,23 @@ export default function CaissePage() {
         const zDepenses = zReportExpenses.reduce((s, e) => s + e.amount, 0)
         const zTotal = zReservation + zCaisse - zDepenses
         const zPmBreakdown = zReportOrders.reduce((acc, o) => {
-          const method = o.payment_method === "mixed" ? "Espèces" : translatePaymentMethod(o.payment_method)
-          acc[method] = (acc[method] || 0) + o.total
+          // Use payment_details JSONB first, then allOrderPayments, then fallback
+          const pmts = (o.payment_details && Array.isArray(o.payment_details) && o.payment_details.length > 0)
+            ? o.payment_details.map((p) => ({ method_name: p.method_name, amount: p.amount }))
+            : allOrderPayments[o.id]
+          if (pmts && pmts.length > 0) {
+            for (const p of pmts) {
+              acc[p.method_name] = (acc[p.method_name] || 0) + p.amount
+            }
+          } else {
+            const method = translatePaymentMethod(o.payment_method)
+            let total = o.total
+            if (o.order_type === "terrain" && o.time_slot) {
+              const slot = o.time_slot as unknown as { price?: number }
+              total += slot.price || 0
+            }
+            acc[method] = (acc[method] || 0) + total
+          }
           return acc
         }, {} as Record<string, number>)
         const zDateObj = new Date(zReportDate + "T12:00:00")
