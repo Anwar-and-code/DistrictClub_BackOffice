@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { 
   Calendar, List, ChevronLeft, ChevronRight, Phone, 
-  X, CreditCard, Eye, EyeOff, Clock, User, MapPin, CalendarDays, Lock, Plus, Wallet, Check
+  X, CreditCard, Eye, EyeOff, Clock, User, MapPin, CalendarDays, Lock, Plus, Wallet, Check, Gift
 } from "lucide-react"
 import { toast } from "sonner"
 import { getReservations, updateReservationStatus, createReservationWithClient, isSlotAvailable } from "@/lib/services/reservations"
@@ -11,7 +11,8 @@ import { getOrCreateClient } from "@/lib/services/clients"
 import { getTerrains } from "@/lib/services/terrains"
 import { getTimeSlots } from "@/lib/services/time-slots"
 import { createClient } from "@/lib/supabase/client"
-import type { Reservation, Terrain, TimeSlot, ReservationStatus } from "@/types/database"
+import type { Reservation, Terrain, TimeSlot, ReservationStatus, ClientPackage } from "@/types/database"
+import { getActiveClientPackagesForUser, addPackageSession, getPackageTimeSlotIdsForPackage } from "@/lib/services/packages"
 import { cn } from "@/lib/utils"
 
 type ViewMode = "calendar" | "list"
@@ -81,6 +82,10 @@ export default function ReservationsPage() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<number | null>(null)
   const [paymentAmount, setPaymentAmount] = useState("")
   const [amountReceived, setAmountReceived] = useState("")
+  // Package attribution state
+  const [playerActivePackages, setPlayerActivePackages] = useState<ClientPackage[]>([])
+  const [isLoadingPackages, setIsLoadingPackages] = useState(false)
+  const [packageSlotMap, setPackageSlotMap] = useState<Record<number, number[]>>({})
   const supabase = createClient()
 
   // Update current time every minute
@@ -142,6 +147,56 @@ export default function ReservationsPage() {
     loadReservations()
   }, [selectedDate])
 
+  // Load active packages when a reservation is selected
+  useEffect(() => {
+    if (!selectedReservation?.user_id) {
+      setPlayerActivePackages([])
+      setPackageSlotMap({})
+      return
+    }
+    const loadPkgs = async () => {
+      setIsLoadingPackages(true)
+      try {
+        const pkgs = await getActiveClientPackagesForUser(selectedReservation.user_id)
+        // Only keep packages that still have remaining sessions
+        const active = pkgs.filter(cp => cp.sessions_used < cp.sessions_total)
+        setPlayerActivePackages(active)
+        // Load eligible time slot IDs for each package
+        const map: Record<number, number[]> = {}
+        await Promise.all(
+          active.map(async (cp) => {
+            if (cp.package_id) {
+              map[cp.id] = await getPackageTimeSlotIdsForPackage(cp.package_id)
+            }
+          })
+        )
+        setPackageSlotMap(map)
+      } catch {
+        // silent
+      } finally {
+        setIsLoadingPackages(false)
+      }
+    }
+    loadPkgs()
+  }, [selectedReservation?.id, selectedReservation?.user_id])
+
+  const handleAttribuerPackage = async (clientPackage: ClientPackage) => {
+    if (!selectedReservation) return
+    try {
+      await addPackageSession({
+        client_package_id: clientPackage.id,
+        reservation_id: selectedReservation.id,
+        session_date: selectedReservation.reservation_date,
+        terrain_id: selectedReservation.terrain_id,
+        time_slot_id: selectedReservation.time_slot_id,
+      })
+      toast.success(`Séance attribuée au package "${clientPackage.package?.name}"`)
+      setSelectedReservation(null)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erreur"
+      toast.error(msg)
+    }
+  }
 
   const handleStatusChange = async (id: number, newStatus: ReservationStatus, skipSecurityCheck = false) => {
     // If changing from PAID to CONFIRMED (annuler le paiement), require security code
@@ -737,6 +792,45 @@ export default function ReservationsPage() {
                 )}>{statusConfig[selectedReservation.status].label}</span>
               </div>
             </div>
+
+            {/* Package attribution */}
+            {selectedReservation.status !== "CANCELED" && playerActivePackages.length > 0 && (
+              <div className="px-4 py-3 border-b">
+                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Gift className="h-3.5 w-3.5" />
+                  Package actif
+                </p>
+                <div className="space-y-1.5">
+                  {playerActivePackages.map((cp) => {
+                    const eligible = packageSlotMap[cp.id] || []
+                    const isEligible = eligible.length === 0 || eligible.includes(selectedReservation.time_slot_id)
+                    return (
+                      <div key={cp.id} className="flex items-center justify-between p-2 bg-amber-50 rounded-lg">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">{cp.package?.name}</p>
+                          <p className="text-xs text-gray-500">{cp.sessions_used}/{cp.sessions_total} séances</p>
+                        </div>
+                        {isEligible ? (
+                          <button
+                            onClick={() => handleAttribuerPackage(cp)}
+                            className="ml-2 px-3 py-1.5 text-xs font-semibold bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors whitespace-nowrap"
+                          >
+                            Attribuer
+                          </button>
+                        ) : (
+                          <span className="ml-2 text-xs text-gray-400 whitespace-nowrap">Créneau non éligible</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            {isLoadingPackages && selectedReservation.status !== "CANCELED" && (
+              <div className="px-4 py-2 border-b">
+                <div className="h-8 bg-neutral-100 rounded animate-pulse" />
+              </div>
+            )}
 
             {/* Actions */}
             {selectedReservation.status !== "CANCELED" && (

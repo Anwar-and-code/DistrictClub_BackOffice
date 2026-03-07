@@ -74,6 +74,60 @@ export interface AvailableSlot {
   reservation_status: ReservationStatus | null
 }
 
+// ─── Packages ────────────────────────────────────────────────────────
+
+export interface Package {
+  id: number
+  name: string
+  description: string | null
+  total_sessions: number
+  price: number
+  regular_price: number
+  duration_minutes: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type ClientPackageStatus = 'ACTIVE' | 'COMPLETED' | 'EXPIRED' | 'CANCELLED'
+
+export interface ClientPackage {
+  id: number
+  package_id: number
+  user_id: string
+  sessions_total: number
+  sessions_used: number
+  paid_amount: number
+  payment_method: 'cash' | 'card' | 'transfer' | 'mixed' | null
+  status: ClientPackageStatus
+  notes: string | null
+  assigned_by: string | null
+  created_at: string
+  expires_at: string | null
+  // joined
+  package?: Package
+  user?: User
+}
+
+export type ClientPackageSessionStatus = 'USED' | 'CANCELLED'
+
+export interface ClientPackageSession {
+  id: number
+  client_package_id: number
+  reservation_id: number | null
+  session_date: string
+  terrain_id: number | null
+  time_slot_id: number | null
+  status: ClientPackageSessionStatus
+  created_at: string
+  // joined
+  terrain?: Terrain
+  time_slot?: TimeSlot
+  reservation?: Reservation
+}
+
+// ─── Events ──────────────────────────────────────────────────────────
+
 export type EventCategory = 'TOURNOI' | 'FORMATION' | 'SOCIAL' | 'ANIMATION' | 'COMPETITION' | 'AUTRE'
 
 export type EventStatus = 'DRAFT' | 'PUBLISHED' | 'CANCELLED' | 'COMPLETED'

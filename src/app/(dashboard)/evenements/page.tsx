@@ -424,6 +424,7 @@ function EventFormModal({
       toast.error("Erreur lors de l'upload")
     } finally {
       setIsUploadingGallery(false)
+      if (galleryInputRef.current) galleryInputRef.current.value = ""
     }
   }
 

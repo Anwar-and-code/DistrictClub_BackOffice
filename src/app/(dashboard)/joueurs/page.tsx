@@ -1,11 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Users, Search, Eye, X, Calendar, Phone, Mail, Trophy } from "lucide-react"
+import { useEffect, useState, useCallback } from "react"
+import { Users, Search, Eye, X, Calendar, Phone, Mail, Trophy, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import type { User, Reservation } from "@/types/database"
 import { cn } from "@/lib/utils"
+
+const PAGE_SIZE = 25
 
 const statusConfig = {
   CONFIRMED: { label: "Confirmé", bg: "bg-emerald-50", color: "text-emerald-700" },
@@ -16,55 +18,59 @@ const statusConfig = {
 
 export default function JoueursPage() {
   const [users, setUsers] = useState<User[]>([])
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [userReservations, setUserReservations] = useState<Reservation[]>([])
   const [userStats, setUserStats] = useState<{ total: number; confirmed: number } | null>(null)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
   const supabase = createClient()
 
-  const loadUsers = async () => {
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+
+  const loadUsers = useCallback(async (page: number, search: string) => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase
+      const from = (page - 1) * PAGE_SIZE
+      const to = from + PAGE_SIZE - 1
+
+      let query = supabase
         .from('profiles')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('role', 'JOUEUR')
         .order('created_at', { ascending: false })
-      
+        .range(from, to)
+
+      if (search.trim()) {
+        const q = search.trim()
+        query = query.or(
+          `first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`
+        )
+      }
+
+      const { data, error, count } = await query
+
       if (error) throw error
       setUsers(data || [])
-      setFilteredUsers(data || [])
+      setTotalCount(count ?? 0)
     } catch (error) {
       console.error(error)
       toast.error("Erreur lors du chargement des joueurs")
     } finally {
       setIsLoading(false)
     }
-  }
-
-  useEffect(() => {
-    loadUsers()
   }, [])
 
   useEffect(() => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      setFilteredUsers(
-        users.filter(
-          (user) =>
-            user.first_name?.toLowerCase().includes(query) ||
-            user.last_name?.toLowerCase().includes(query) ||
-            user.email.toLowerCase().includes(query) ||
-            user.phone?.includes(query)
-        )
-      )
-    } else {
-      setFilteredUsers(users)
-    }
-  }, [searchQuery, users])
+    loadUsers(currentPage, searchQuery)
+  }, [currentPage, loadUsers])
+
+  useEffect(() => {
+    setCurrentPage(1)
+    loadUsers(1, searchQuery)
+  }, [searchQuery])
 
   const handleViewUser = async (user: User) => {
     setSelectedUser(user)
@@ -123,7 +129,7 @@ export default function JoueursPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-950">Joueurs</h1>
-          <p className="text-sm text-neutral-500 mt-1">{users.length} joueur{users.length > 1 ? 's' : ''} inscrit{users.length > 1 ? 's' : ''}</p>
+          <p className="text-sm text-neutral-500 mt-1">{totalCount} joueur{totalCount > 1 ? 's' : ''} inscrit{totalCount > 1 ? 's' : ''}</p>
         </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
@@ -140,12 +146,21 @@ export default function JoueursPage() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-16 bg-neutral-100 rounded-lg animate-pulse" />
+          <div className="p-4 space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-1 py-2">
+                <div className="h-10 w-10 rounded-full bg-neutral-100 animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-40" />
+                  <div className="h-3 bg-neutral-100 rounded animate-pulse w-56" />
+                </div>
+                <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-24" />
+                <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-16" />
+                <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-20" />
+              </div>
             ))}
           </div>
-        ) : filteredUsers.length === 0 ? (
+        ) : users.length === 0 ? (
           <div className="p-12 text-center">
             <Users className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
             <p className="text-neutral-500 text-sm">
@@ -164,7 +179,7 @@ export default function JoueursPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {filteredUsers.map((user) => (
+              {users.map((user) => (
                 <tr key={user.id} className="hover:bg-neutral-50 transition-colors">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
@@ -207,6 +222,54 @@ export default function JoueursPage() {
           </table>
         )}
       </div>
+
+      {/* Pagination */}
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-sm text-neutral-500">
+            Page {currentPage} sur {totalPages} · {totalCount} joueurs
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-2 rounded-lg border border-neutral-200 text-neutral-500 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              const page = totalPages <= 7
+                ? i + 1
+                : currentPage <= 4
+                  ? i + 1
+                  : currentPage >= totalPages - 3
+                    ? totalPages - 6 + i
+                    : currentPage - 3 + i
+              return (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={cn(
+                    "h-9 w-9 rounded-lg text-sm font-medium transition-colors",
+                    page === currentPage
+                      ? "bg-neutral-950 text-white"
+                      : "border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                  )}
+                >
+                  {page}
+                </button>
+              )
+            })}
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-lg border border-neutral-200 text-neutral-500 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* User Detail Modal */}
       {selectedUser && (

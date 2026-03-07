@@ -49,16 +49,25 @@ export interface EventInput {
 
 export async function createEvent(event: EventInput) {
   const supabase = createClient()
-  console.log('createEvent payload:', JSON.stringify(event, null, 2))
+
+  // Strip undefined values to avoid sending non-existent columns
+  const payload: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(event)) {
+    if (value !== undefined) {
+      payload[key] = value
+    }
+  }
+
+  console.log('createEvent payload:', JSON.stringify(payload, null, 2))
   const { data, error } = await supabase
     .from('events')
-    .insert(event)
+    .insert(payload)
     .select()
     .single()
 
   if (error) {
-    console.error('createEvent error:', error)
-    throw error
+    console.error('createEvent error:', JSON.stringify(error, null, 2), 'code:', error.code, 'message:', error.message, 'details:', error.details, 'hint:', error.hint)
+    throw new Error(error.message || error.details || `Insert failed (code: ${error.code})`)
   }
   console.log('createEvent success:', data)
   return data as unknown as Event
@@ -66,17 +75,26 @@ export async function createEvent(event: EventInput) {
 
 export async function updateEvent(id: string, updates: Partial<EventInput>) {
   const supabase = createClient()
-  console.log('updateEvent id:', id, 'payload:', JSON.stringify(updates, null, 2))
+
+  // Strip undefined values to avoid sending non-existent columns
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) {
+      payload[key] = value
+    }
+  }
+
+  console.log('updateEvent id:', id, 'payload:', JSON.stringify(payload, null, 2))
   const { data, error } = await supabase
     .from('events')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(payload)
     .eq('id', id)
     .select()
     .single()
 
   if (error) {
-    console.error('updateEvent error:', error)
-    throw error
+    console.error('updateEvent error:', JSON.stringify(error, null, 2), 'code:', error.code, 'message:', error.message, 'details:', error.details, 'hint:', error.hint)
+    throw new Error(error.message || error.details || `Update failed (code: ${error.code})`)
   }
   console.log('updateEvent success:', data)
   return data as unknown as Event

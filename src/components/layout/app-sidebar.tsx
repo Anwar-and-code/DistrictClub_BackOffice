@@ -22,6 +22,8 @@ import {
   FileBarChart,
   Receipt,
   PackageSearch,
+  Bell,
+  Gift,
 } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
 import Link from "next/link"
@@ -63,6 +65,7 @@ const gestionItems: NavItem[] = [
   { title: "Créneaux", url: "/creneaux", icon: Clock, permission: PERMISSIONS.CRENEAUX_VIEW },
   { title: "Joueurs", url: "/joueurs", icon: Users, permission: PERMISSIONS.JOUEURS_VIEW },
   { title: "Événements", url: "/evenements", icon: CalendarDays, permission: PERMISSIONS.EVENEMENTS_VIEW },
+  { title: "Packages", url: "/packages", icon: Gift, permission: PERMISSIONS.PACKAGES_VIEW },
   {
     title: "Produits",
     icon: Package,
@@ -89,6 +92,7 @@ const adminItems: NavItem[] = [
       { title: "Produits", url: "/rapports/produits", icon: PackageSearch },
     ],
   },
+  { title: "Notifications", url: "/notifications", icon: Bell, permission: PERMISSIONS.NOTIFICATIONS_VIEW },
   { title: "Paramètres", url: "/parametres", icon: Settings, permission: PERMISSIONS.PARAMETRES_MANAGE },
 ]
 
