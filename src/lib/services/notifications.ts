@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-
 // ─── Types ────────────────────────────────────────────────────────────
 export type NotificationType = 'reservation_confirmed' | 'reservation_reminder' | 'event_published' | 'custom'
 export type TargetType = 'single' | 'multiple' | 'all'
@@ -84,14 +82,10 @@ export const NOTIFICATION_TARGET_LABELS: Record<string, string> = {
 export async function sendPushNotification(
   params: SendNotificationParams
 ): Promise<SendNotificationResult> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+  const res = await fetch('/api/send-push-notification', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session?.access_token || ''}`,
     },
     body: JSON.stringify(params),
   })
