@@ -24,6 +24,7 @@ import {
   PackageSearch,
   Bell,
   Gift,
+  Repeat,
 } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
 import Link from "next/link"
@@ -66,6 +67,7 @@ const gestionItems: NavItem[] = [
   { title: "Joueurs", url: "/joueurs", icon: Users, permission: PERMISSIONS.JOUEURS_VIEW },
   { title: "Événements", url: "/evenements", icon: CalendarDays, permission: PERMISSIONS.EVENEMENTS_VIEW },
   { title: "Packages", url: "/packages", icon: Gift, permission: PERMISSIONS.PACKAGES_VIEW },
+  { title: "Abonnements", url: "/abonnements", icon: Repeat, permission: PERMISSIONS.ABONNEMENTS_VIEW },
   {
     title: "Produits",
     icon: Package,

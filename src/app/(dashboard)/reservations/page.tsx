@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { 
   Calendar, List, ChevronLeft, ChevronRight, Phone, 
-  X, CreditCard, Eye, EyeOff, Clock, User, MapPin, CalendarDays, Lock, Plus, Wallet, Check, Gift
+  X, CreditCard, Eye, EyeOff, Clock, User, MapPin, CalendarDays, Lock, Plus, Wallet, Check, Gift, Loader2
 } from "lucide-react"
 import { toast } from "sonner"
 import { getReservations, updateReservationStatus, createReservationWithClient, isSlotAvailable } from "@/lib/services/reservations"
@@ -515,11 +515,10 @@ export default function ReservationsPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {isLoading ? (
-          <div className="p-6">
-            <div className="animate-pulse space-y-2">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="h-16 bg-gray-200 rounded" />
-              ))}
+          <div className="flex items-center justify-center py-20">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+              <p className="text-sm text-neutral-500">Chargement des réservations...</p>
             </div>
           </div>
         ) : viewMode === "calendar" ? (

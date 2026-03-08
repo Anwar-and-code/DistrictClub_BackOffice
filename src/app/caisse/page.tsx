@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Calendar,
   Info,
+  Loader2,
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
@@ -1610,7 +1611,7 @@ export default function CaissePage() {
   if (isLoading || !sessionChecked) {
     return (
       <div className="flex items-center justify-center h-screen bg-neutral-950">
-        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        <Loader2 className="h-6 w-6 animate-spin text-white" />
       </div>
     )
   }
@@ -2194,7 +2195,7 @@ export default function CaissePage() {
               className="w-full py-4 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isProcessing ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
                   <DollarSign className="h-4 w-4" />
@@ -2998,7 +2999,7 @@ export default function CaissePage() {
                     )}
                   >
                     {isProcessing ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
                         <Check className="h-4 w-4" />
@@ -3476,7 +3477,7 @@ export default function CaissePage() {
               <div className="flex-1 overflow-y-auto p-4 bg-neutral-100">
                 {zReportLoading ? (
                   <div className="flex items-center justify-center py-16">
-                    <div className="animate-spin h-6 w-6 border-2 border-neutral-400 border-t-transparent rounded-full" />
+                    <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
                   </div>
                 ) : (
                   <div id="z-report-content" className="bg-white mx-auto shadow-sm border border-neutral-200" style={{ width: "72mm", fontFamily: "'Courier New', monospace", fontSize: "12px", padding: "4mm" }}>
@@ -3660,7 +3661,7 @@ export default function CaissePage() {
             <div className="flex-1 overflow-auto">
               {resModalLoading ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full" />
+                  <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
                 </div>
               ) : (
                 <table className="w-full table-fixed border-collapse">

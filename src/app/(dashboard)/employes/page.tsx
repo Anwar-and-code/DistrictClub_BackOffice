@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback } from "react"
 import {
   UserCog, Plus, Pencil, Trash2, X, Shield,
-  Check, Home, Lock, Eye, Settings2
+  Check, Home, Lock, Eye, Settings2, Loader2
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { TableSkeleton } from "@/components/ui/loading"
 import { useAuth } from "@/components/providers/auth-provider"
 import { PERMISSIONS, AVAILABLE_ROUTES } from "@/lib/permissions"
 
@@ -70,6 +71,8 @@ export default function EmployesPage() {
   const [empModal, setEmpModal] = useState<{ type: 'create' | 'edit'; employee?: Employee } | null>(null)
   const [empForm, setEmpForm] = useState({ username: "", full_name: "", password: "", profile_id: "" })
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deleteModal, setDeleteModal] = useState<Employee | null>(null)
 
   // ─── Profile modal state ──────────────────────────────────────────
@@ -185,6 +188,7 @@ export default function EmployesPage() {
 
   const handleDeleteEmployee = async () => {
     if (!deleteModal) return
+    setIsDeleting(true)
     try {
       const { error } = await supabase.from('employees').delete().eq('id', deleteModal.id)
       if (error) throw error
@@ -194,10 +198,13 @@ export default function EmployesPage() {
     } catch (error) {
       console.error(error)
       toast.error("Erreur lors de la suppression")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
   const toggleActive = async (employee: Employee) => {
+    setTogglingId(employee.id)
     try {
       const { error } = await supabase
         .from('employees')
@@ -209,6 +216,8 @@ export default function EmployesPage() {
     } catch (error) {
       console.error(error)
       toast.error("Erreur")
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -403,9 +412,7 @@ export default function EmployesPage() {
           {/* Employees table */}
           <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
             {isLoading ? (
-              <div className="p-8 space-y-4">
-                {[1, 2, 3].map(i => <div key={i} className="h-16 bg-neutral-100 rounded-lg animate-pulse" />)}
-              </div>
+              <TableSkeleton rows={4} cols={4} />
             ) : employees.length === 0 ? (
               <div className="p-12 text-center">
                 <UserCog className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
@@ -451,13 +458,15 @@ export default function EmployesPage() {
                           {canManage ? (
                             <button
                               onClick={() => toggleActive(employee)}
+                              disabled={togglingId === employee.id}
                               className={cn(
-                                "text-xs font-medium px-2 py-1 rounded-full transition-colors",
+                                "text-xs font-medium px-2 py-1 rounded-full transition-colors inline-flex items-center gap-1.5 disabled:opacity-50",
                                 employee.is_active
                                   ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                                   : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
                               )}
                             >
+                              {togglingId === employee.id && <Loader2 className="h-3 w-3 animate-spin" />}
                               {employee.is_active ? "Actif" : "Inactif"}
                             </button>
                           ) : (
@@ -496,7 +505,17 @@ export default function EmployesPage() {
         <div className="space-y-4">
           {isLoading ? (
             <div className="space-y-4">
-              {[1, 2, 3].map(i => <div key={i} className="h-28 bg-white rounded-xl border border-neutral-200 animate-pulse" />)}
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-xl border border-neutral-200 p-5 animate-pulse">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-xl bg-neutral-100" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-neutral-100 rounded w-1/3" />
+                      <div className="h-3 bg-neutral-100 rounded w-1/2" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : profiles.length === 0 ? (
             <div className="bg-white rounded-xl border border-neutral-200 p-12 text-center">
@@ -646,8 +665,9 @@ export default function EmployesPage() {
               <button onClick={() => setEmpModal(null)} className="flex-1 px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors">
                 Annuler
               </button>
-              <button onClick={handleSaveEmployee} disabled={isSaving} className="flex-1 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50">
-                {isSaving ? "..." : "Enregistrer"}
+              <button onClick={handleSaveEmployee} disabled={isSaving} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50">
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSaving ? "Enregistrement..." : "Enregistrer"}
               </button>
             </div>
           </div>
@@ -816,8 +836,9 @@ export default function EmployesPage() {
               <button onClick={() => setProfileModal(null)} className="flex-1 px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors">
                 Annuler
               </button>
-              <button onClick={handleSaveProfile} disabled={isSaving} className="flex-1 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50">
-                {isSaving ? "..." : "Enregistrer"}
+              <button onClick={handleSaveProfile} disabled={isSaving} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50">
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSaving ? "Enregistrement..." : "Enregistrer"}
               </button>
             </div>
           </div>
@@ -842,8 +863,9 @@ export default function EmployesPage() {
               <button onClick={() => setDeleteModal(null)} className="flex-1 px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors">
                 Annuler
               </button>
-              <button onClick={handleDeleteEmployee} className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors">
-                Supprimer
+              <button onClick={handleDeleteEmployee} disabled={isDeleting} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50">
+                {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isDeleting ? "Suppression..." : "Supprimer"}
               </button>
             </div>
           </div>
@@ -868,8 +890,9 @@ export default function EmployesPage() {
               <button onClick={() => setDeleteProfileModal(null)} className="flex-1 px-4 py-2 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors">
                 Annuler
               </button>
-              <button onClick={handleDeleteProfile} className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors">
-                Supprimer
+              <button onClick={handleDeleteProfile} disabled={isDeleting} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50">
+                {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isDeleting ? "Suppression..." : "Supprimer"}
               </button>
             </div>
           </div>

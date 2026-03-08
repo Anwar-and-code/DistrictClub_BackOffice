@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Wallet, Plus, Pencil, Trash2, X, Calendar, Filter } from "lucide-react"
+import { Wallet, Plus, Pencil, Trash2, X, Calendar, Filter, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { TableSkeleton } from "@/components/ui/loading"
 
 interface ExpenseType {
   id: number
@@ -40,6 +41,7 @@ export default function DepensesPage() {
   const [typeFormData, setTypeFormData] = useState({ name: "", description: "" })
   const [deleteTypeModal, setDeleteTypeModal] = useState<ExpenseType | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [filterType, setFilterType] = useState("")
   const [filterMonth, setFilterMonth] = useState("")
   const supabase = createClient()
@@ -137,6 +139,7 @@ export default function DepensesPage() {
 
   const handleDelete = async () => {
     if (!deleteModal) return
+    setIsDeleting(true)
     try {
       const { error } = await supabase
         .from('expenses')
@@ -149,6 +152,8 @@ export default function DepensesPage() {
     } catch (error) {
       console.error(error)
       toast.error("Erreur lors de la suppression")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -269,9 +274,7 @@ export default function DepensesPage() {
       {/* Expenses List */}
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <TableSkeleton rows={5} cols={4} />
         ) : filteredExpenses.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
             <Wallet className="w-12 h-12 mb-3 stroke-1" />
@@ -444,9 +447,10 @@ export default function DepensesPage() {
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
               >
-                {isSaving ? "..." : modal.type === 'create' ? 'Ajouter' : 'Enregistrer'}
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSaving ? "Enregistrement..." : modal.type === 'create' ? 'Ajouter' : 'Enregistrer'}
               </button>
             </div>
           </div>
@@ -502,7 +506,8 @@ export default function DepensesPage() {
                 disabled={isSaving}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
               >
-                {isSaving ? "..." : typeModal.type === 'create' ? 'Ajouter' : 'Enregistrer'}
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSaving ? "Enregistrement..." : typeModal.type === 'create' ? 'Ajouter' : 'Enregistrer'}
               </button>
             </div>
           </div>
@@ -526,9 +531,11 @@ export default function DepensesPage() {
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                disabled={isDeleting}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >
-                Supprimer
+                {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isDeleting ? "Suppression..." : "Supprimer"}
               </button>
             </div>
           </div>

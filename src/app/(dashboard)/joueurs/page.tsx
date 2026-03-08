@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Users, Search, Eye, X, Calendar, Phone, Mail, Trophy, ChevronLeft, ChevronRight } from "lucide-react"
+import { Users, Search, Eye, X, Calendar, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import type { User, Reservation } from "@/types/database"
 import { cn } from "@/lib/utils"
+import { TableSkeleton } from "@/components/ui/loading"
 
 const PAGE_SIZE = 25
 
@@ -146,20 +147,7 @@ export default function JoueursPage() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading ? (
-          <div className="p-4 space-y-3">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-1 py-2">
-                <div className="h-10 w-10 rounded-full bg-neutral-100 animate-pulse shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-40" />
-                  <div className="h-3 bg-neutral-100 rounded animate-pulse w-56" />
-                </div>
-                <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-24" />
-                <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-16" />
-                <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-20" />
-              </div>
-            ))}
-          </div>
+          <TableSkeleton rows={8} cols={4} />
         ) : users.length === 0 ? (
           <div className="p-12 text-center">
             <Users className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
@@ -345,10 +333,9 @@ export default function JoueursPage() {
               <div>
                 <h4 className="text-sm font-semibold text-neutral-950 mb-3">Dernières réservations</h4>
                 {isLoadingDetails ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-14 bg-neutral-100 rounded-lg animate-pulse" />
-                    ))}
+                  <div className="flex flex-col items-center py-8 gap-2">
+                    <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+                    <p className="text-xs text-neutral-500">Chargement des réservations...</p>
                   </div>
                 ) : userReservations.length === 0 ? (
                   <p className="text-sm text-neutral-500 text-center py-4">Aucune réservation</p>

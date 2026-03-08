@@ -14,11 +14,13 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  Loader2,
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/components/providers/auth-provider"
 import { cn } from "@/lib/utils"
+import { TableSkeleton } from "@/components/ui/loading"
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface PosProduct {
@@ -108,6 +110,7 @@ export default function AchatsPage() {
 
   // Delete
   const [deleteModal, setDeleteModal] = useState<PurchaseOrder | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // ─── Load Data ───────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -378,6 +381,7 @@ export default function AchatsPage() {
   // ─── Delete order ───────────────────────────────────────────────
   const handleDelete = async () => {
     if (!deleteModal) return
+    setIsDeleting(true)
     try {
       // Get items to reverse stock
       const { data: items } = await supabase
@@ -417,6 +421,8 @@ export default function AchatsPage() {
     } catch (error) {
       console.error(error)
       toast.error("Erreur lors de la suppression")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -495,9 +501,7 @@ export default function AchatsPage() {
       {/* Orders Table */}
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <TableSkeleton rows={5} cols={6} />
         ) : orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
             <ShoppingCart className="w-12 h-12 mb-3 stroke-1" />
@@ -778,8 +782,9 @@ export default function AchatsPage() {
               <button
                 onClick={handleSave}
                 disabled={isSaving || validLines.length === 0}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
               >
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {isSaving ? "Enregistrement..." : "Valider et entrer en stock"}
               </button>
             </div>
@@ -920,9 +925,11 @@ export default function AchatsPage() {
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                disabled={isDeleting}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >
-                Supprimer
+                {isDeleting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isDeleting ? "Suppression..." : "Supprimer"}
               </button>
             </div>
           </div>

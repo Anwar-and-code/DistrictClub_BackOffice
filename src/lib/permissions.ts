@@ -27,6 +27,8 @@ export const PERMISSIONS = {
   NOTIFICATIONS_MANAGE:'notifications.manage',
   PACKAGES_VIEW:       'packages.view',
   PACKAGES_MANAGE:     'packages.manage',
+  ABONNEMENTS_VIEW:    'abonnements.view',
+  ABONNEMENTS_MANAGE:  'abonnements.manage',
 } as const
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS]
@@ -72,6 +74,7 @@ export const PERMISSION_CATEGORIES = [
   { key: 'Événements',    label: 'Événements' },
   { key: 'Notifications', label: 'Notifications' },
   { key: 'Packages',      label: 'Packages' },
+  { key: 'Abonnements',   label: 'Abonnements' },
 ] as const
 
 // Routes disponibles pour base_route
@@ -87,6 +90,7 @@ export const AVAILABLE_ROUTES = [
   { value: '/evenements',    label: 'Événements' },
   { value: '/notifications', label: 'Notifications' },
   { value: '/packages',      label: 'Packages' },
+  { value: '/abonnements',   label: 'Abonnements' },
 ] as const
 
 // Map route → permission requise pour y accéder
@@ -104,6 +108,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/evenements':    PERMISSIONS.EVENEMENTS_VIEW,
   '/notifications': PERMISSIONS.NOTIFICATIONS_VIEW,
   '/packages':      PERMISSIONS.PACKAGES_VIEW,
+  '/abonnements':   PERMISSIONS.ABONNEMENTS_VIEW,
 }
 
 // Helper : vérifie si l'utilisateur a une permission

@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { MapPin, Plus, Pencil, Power, PowerOff, X } from "lucide-react"
+import { MapPin, Plus, Pencil, Power, PowerOff, X, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { getTerrains, updateTerrain, createTerrain } from "@/lib/services/terrains"
 import type { Terrain } from "@/types/database"
 import { cn } from "@/lib/utils"
+import { CardSkeleton } from "@/components/ui/loading"
 
 export default function TerrainsPage() {
   const [terrains, setTerrains] = useState<Terrain[]>([])
@@ -13,6 +14,7 @@ export default function TerrainsPage() {
   const [modal, setModal] = useState<{ type: 'create' | 'edit', terrain?: Terrain } | null>(null)
   const [formData, setFormData] = useState({ code: "" })
   const [isSaving, setIsSaving] = useState(false)
+  const [togglingId, setTogglingId] = useState<number | null>(null)
 
   const loadTerrains = async () => {
     setIsLoading(true)
@@ -66,6 +68,7 @@ export default function TerrainsPage() {
   }
 
   const handleToggleActive = async (terrain: Terrain) => {
+    setTogglingId(terrain.id)
     try {
       await updateTerrain(terrain.id, { is_active: !terrain.is_active })
       toast.success(terrain.is_active ? "Terrain désactivé" : "Terrain activé")
@@ -73,6 +76,8 @@ export default function TerrainsPage() {
     } catch (error) {
       console.error(error)
       toast.error("Erreur")
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -96,13 +101,7 @@ export default function TerrainsPage() {
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {isLoading ? (
-          [1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl border border-neutral-200 p-6 animate-pulse">
-              <div className="h-12 w-12 bg-neutral-100 rounded-xl mb-4" />
-              <div className="h-4 bg-neutral-100 rounded w-1/2 mb-2" />
-              <div className="h-3 bg-neutral-100 rounded w-1/3" />
-            </div>
-          ))
+          <CardSkeleton count={4} />
         ) : terrains.length === 0 ? (
           <div className="col-span-full bg-white rounded-xl border border-neutral-200 p-12 text-center">
             <MapPin className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
@@ -130,14 +129,21 @@ export default function TerrainsPage() {
                   </button>
                   <button
                     onClick={() => handleToggleActive(terrain)}
+                    disabled={togglingId === terrain.id}
                     className={cn(
-                      "p-1.5 rounded-lg transition-colors",
+                      "p-1.5 rounded-lg transition-colors disabled:opacity-50",
                       terrain.is_active
                         ? "text-red-500 hover:bg-red-50"
                         : "text-emerald-500 hover:bg-emerald-50"
                     )}
                   >
-                    {terrain.is_active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                    {togglingId === terrain.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : terrain.is_active ? (
+                      <PowerOff className="h-4 w-4" />
+                    ) : (
+                      <Power className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -186,9 +192,10 @@ export default function TerrainsPage() {
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
               >
-                {isSaving ? "..." : "Enregistrer"}
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSaving ? "Enregistrement..." : "Enregistrer"}
               </button>
             </div>
           </div>

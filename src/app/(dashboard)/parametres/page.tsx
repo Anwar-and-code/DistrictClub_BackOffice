@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Settings, Building2, Clock, CreditCard, Bell, Save, Check, Wallet, GripVertical, Lock, ShoppingBag, LayoutGrid, Plus, Pencil, Trash2, X, Circle, Square, RectangleHorizontal, Users, Keyboard } from "lucide-react"
+import { Settings, Building2, Clock, CreditCard, Bell, Save, Check, Wallet, GripVertical, Lock, ShoppingBag, LayoutGrid, Plus, Pencil, Trash2, X, Circle, Square, RectangleHorizontal, Users, Keyboard, Loader2 } from "lucide-react"
 import { useVirtualKeyboardEnabled } from "@/components/ui/virtual-keyboard"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
@@ -257,8 +257,8 @@ export default function ParametresPage() {
           disabled={isSaving}
           className="flex items-center gap-2 px-4 py-2 bg-neutral-950 text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
         >
-          {isSaving ? <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="h-4 w-4" />}
-          Enregistrer
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {isSaving ? "Enregistrement..." : "Enregistrer"}
         </button>
       </div>
 
@@ -830,14 +830,8 @@ export default function ParametresPage() {
               disabled={isSavingTable}
               className="w-full mt-6 py-3 bg-neutral-900 text-white text-sm font-semibold rounded-xl hover:bg-neutral-800 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
             >
-              {isSavingTable ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  {tableModal.type === 'create' ? 'Créer' : 'Enregistrer'}
-                </>
-              )}
+              {isSavingTable ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {isSavingTable ? "Enregistrement..." : (tableModal.type === 'create' ? 'Créer' : 'Enregistrer')}
             </button>
           </div>
         </div>

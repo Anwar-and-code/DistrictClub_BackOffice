@@ -297,9 +297,10 @@ export default function EvenementsPage() {
               <button
                 onClick={handleDelete}
                 disabled={deleteEventMutation.isPending}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >
-                {deleteEventMutation.isPending ? "..." : "Supprimer"}
+                {deleteEventMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                {deleteEventMutation.isPending ? "Suppression..." : "Supprimer"}
               </button>
             </div>
           </div>
@@ -758,8 +759,9 @@ function EventFormModal({
           <button
             onClick={handleSubmit(onSubmit as any)}
             disabled={isSaving}
-            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
           >
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
             {isSaving ? "Enregistrement..." : "Enregistrer"}
           </button>
         </div>

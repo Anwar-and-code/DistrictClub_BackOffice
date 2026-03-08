@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Clock, Plus, Pencil, Power, PowerOff, X } from "lucide-react"
+import { Clock, Plus, Pencil, Power, PowerOff, X, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { getTimeSlots, updateTimeSlot, createTimeSlot } from "@/lib/services/time-slots"
 import type { TimeSlot } from "@/types/database"
 import { cn } from "@/lib/utils"
+import { TableSkeleton } from "@/components/ui/loading"
 
 export default function CreneauxPage() {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
@@ -13,6 +14,7 @@ export default function CreneauxPage() {
   const [modal, setModal] = useState<{ type: 'create' | 'edit', slot?: TimeSlot } | null>(null)
   const [formData, setFormData] = useState({ start_time: "", end_time: "", price: "" })
   const [isSaving, setIsSaving] = useState(false)
+  const [togglingId, setTogglingId] = useState<number | null>(null)
 
   const loadTimeSlots = async () => {
     setIsLoading(true)
@@ -84,6 +86,7 @@ export default function CreneauxPage() {
   }
 
   const handleToggleActive = async (slot: TimeSlot) => {
+    setTogglingId(slot.id)
     try {
       await updateTimeSlot(slot.id, { is_active: !slot.is_active })
       toast.success(slot.is_active ? "Créneau désactivé" : "Créneau activé")
@@ -91,6 +94,8 @@ export default function CreneauxPage() {
     } catch (error) {
       console.error(error)
       toast.error("Erreur")
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -134,11 +139,7 @@ export default function CreneauxPage() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-14 bg-neutral-100 rounded-lg animate-pulse" />
-            ))}
-          </div>
+          <TableSkeleton rows={5} cols={5} />
         ) : timeSlots.length === 0 ? (
           <div className="p-12 text-center">
             <Clock className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
@@ -197,12 +198,19 @@ export default function CreneauxPage() {
                         </button>
                         <button
                           onClick={() => handleToggleActive(slot)}
+                          disabled={togglingId === slot.id}
                           className={cn(
-                            "p-1.5 rounded-lg transition-colors",
+                            "p-1.5 rounded-lg transition-colors disabled:opacity-50",
                             slot.is_active ? "text-red-500 hover:bg-red-50" : "text-emerald-500 hover:bg-emerald-50"
                           )}
                         >
-                          {slot.is_active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                          {togglingId === slot.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : slot.is_active ? (
+                            <PowerOff className="h-4 w-4" />
+                          ) : (
+                            <Power className="h-4 w-4" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -271,9 +279,10 @@ export default function CreneauxPage() {
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-neutral-950 rounded-lg hover:bg-neutral-800 transition-colors disabled:opacity-50"
               >
-                {isSaving ? "..." : "Enregistrer"}
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSaving ? "Enregistrement..." : "Enregistrer"}
               </button>
             </div>
           </div>

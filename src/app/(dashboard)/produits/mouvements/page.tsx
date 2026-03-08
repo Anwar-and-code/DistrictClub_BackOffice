@@ -11,10 +11,12 @@ import {
   RefreshCw,
   TrendingUp,
   TrendingDown,
+  Loader2,
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { TableSkeleton } from "@/components/ui/loading"
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface StockMovement {
@@ -242,9 +244,7 @@ export default function MouvementsPage() {
       {/* Movements Table */}
       <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <TableSkeleton rows={6} cols={6} />
         ) : movements.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
             <Package className="w-12 h-12 mb-3 stroke-1" />

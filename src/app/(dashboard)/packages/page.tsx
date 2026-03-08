@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback } from "react"
 import {
   Gift, Plus, Search, Edit2, Trash2, X, Users, Check,
-  Eye, Clock, Package as PackageIcon
+  Eye, Clock, Package as PackageIcon, Loader2
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { TableSkeleton, CardSkeleton } from "@/components/ui/loading"
 import type {
   Package as PackageType,
   ClientPackage,
@@ -450,13 +451,7 @@ export default function PackagesPage() {
       {tab === "definitions" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {isLoadingPkgs ? (
-            Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl border border-neutral-200 p-6 animate-pulse">
-                <div className="h-5 bg-neutral-100 rounded w-32 mb-3" />
-                <div className="h-4 bg-neutral-100 rounded w-48 mb-4" />
-                <div className="h-8 bg-neutral-100 rounded w-24" />
-              </div>
-            ))
+            <CardSkeleton count={3} />
           ) : packages.length === 0 ? (
             <div className="col-span-full bg-white rounded-xl border border-neutral-200 p-12 text-center">
               <Gift className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
@@ -573,17 +568,7 @@ export default function PackagesPage() {
 
           <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
             {isLoadingCP ? (
-              <div className="p-4 space-y-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-4 px-1 py-3">
-                    <div className="h-10 w-10 rounded-full bg-neutral-100 animate-pulse shrink-0" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3.5 bg-neutral-100 rounded animate-pulse w-40" />
-                      <div className="h-3 bg-neutral-100 rounded animate-pulse w-56" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <TableSkeleton rows={5} cols={6} />
             ) : filteredCP.length === 0 ? (
               <div className="p-12 text-center">
                 <PackageIcon className="h-10 w-10 text-neutral-300 mx-auto mb-3" />
@@ -806,7 +791,7 @@ export default function PackagesPage() {
               </button>
               <button
                 onClick={handleSavePkg}
-                className="px-4 py-2 bg-neutral-950 text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-neutral-950 text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
               >
                 {editingPkg ? "Enregistrer" : "Créer"}
               </button>
@@ -911,7 +896,7 @@ export default function PackagesPage() {
                     )}
                     {isSearchingPlayers && (
                       <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-lg p-3 text-center">
-                        <span className="text-xs text-neutral-500">Recherche...</span>
+                        <Loader2 className="h-4 w-4 animate-spin text-neutral-400 mx-auto" />
                       </div>
                     )}
                   </div>
@@ -965,7 +950,7 @@ export default function PackagesPage() {
               </button>
               <button
                 onClick={handleAssign}
-                className="px-4 py-2 bg-neutral-950 text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-neutral-950 text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
               >
                 Attribuer
               </button>
@@ -1066,10 +1051,9 @@ export default function PackagesPage() {
               <div>
                 <h4 className="text-sm font-semibold text-neutral-950 mb-3">Séances</h4>
                 {isLoadingSessions ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-14 bg-neutral-100 rounded-lg animate-pulse" />
-                    ))}
+                  <div className="flex flex-col items-center py-8 gap-2">
+                    <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+                    <p className="text-xs text-neutral-500">Chargement des séances...</p>
                   </div>
                 ) : sessions.length === 0 ? (
                   <p className="text-sm text-neutral-500 text-center py-4">Aucune séance enregistrée</p>

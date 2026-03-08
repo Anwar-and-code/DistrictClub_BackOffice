@@ -163,3 +163,26 @@ export interface Event {
   updated_at: string
   event_images?: EventImage[]
 }
+
+// ─── Abonnements ─────────────────────────────────────────────────────
+
+export type AbonnementStatus = 'ACTIVE' | 'PAUSED' | 'EXPIRED' | 'CANCELLED'
+
+export interface Abonnement {
+  id: number
+  user_id: string
+  terrain_id: number
+  time_slot_id: number
+  day_of_week: number
+  start_date: string
+  end_date: string
+  status: AbonnementStatus
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // joined
+  user?: User
+  terrain?: Terrain
+  time_slot?: TimeSlot
+}
