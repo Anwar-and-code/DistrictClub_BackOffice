@@ -1,0 +1,94 @@
+Ajoute la fonctionnalité complète de gestion des **Événements** dans le backoffice. Les tables Supabase existent déjà. Respecte strictement les patterns existants du projet.
+
+## Contexte DB Supabase (project_id: vslisxnahktqaifdurcu)
+
+Les tables suivantes existent déjà en base :
+
+**Table `events`** :
+- id (uuid PK), title (text NOT NULL), subtitle (text), description (text NOT NULL), long_description (text)
+- category (text NOT NULL — enum: 'TOURNOI', 'FORMATION', 'SOCIAL', 'ANIMATION', 'COMPETITION', 'AUTRE')
+- status (text NOT NULL — enum: 'DRAFT', 'PUBLISHED', 'CANCELLED', 'COMPLETED')
+- start_date (timestamptz NOT NULL), end_date (timestamptz)
+- location (text NOT NULL), cover_image_url (text)
+- is_featured (boolean default false), display_order (int default 0)
+- tags (text[]), price_info (text), is_free (boolean default true)
+- contact_phone (text, default '+2250799998888') — numéro de contact affiché dans l'app mobile
+- created_by (uuid FK → auth.users), created_at, updated_at
+
+**Table `event_images`** :
+- id (uuid PK), event_id (uuid FK → events ON DELETE CASCADE)
+- image_url (text NOT NULL), caption (text), display_order (int default 0)
+
+**Storage bucket** : `event-images` (public, 5MB max, jpg/png/webp/gif)
+
+## Ce qu'il faut faire
+
+### 1. Types — `src/types/database.ts`
+Ajouter les interfaces `Event`, `EventImage`, `EventCategory`, `EventStatus` en suivant le style des types existants (Terrain, Reservation, etc.)
+
+### 2. Service — `src/lib/services/events.ts`
+Créer le service CRUD complet en suivant exactement le pattern de `src/lib/services/terrains.ts` :
+- `getEvents()` — select `*, event_images(*)` ordonné par `display_order` puis `start_date`
+- `getEventById(id: string)` — avec join `event_images(*)`
+- `createEvent(event)` — insert
+- `updateEvent(id, updates)` — update
+- `deleteEvent(id)` — delete (cascade supprime les images)
+- `uploadEventImage(file: File)` — upload dans le bucket `event-images`, retourne l'URL publique
+- `deleteEventImage(imageId: string)` — supprime de la table event_images
+- `addEventImage(eventId, imageUrl, caption?, displayOrder?)` — insert dans event_images
+
+### 3. Hook — `src/hooks/use-events.ts`
+Créer le hook TanStack React Query en suivant exactement le pattern de `src/hooks/use-terrains.ts` :
+- `eventKeys` (query key factory)
+- `useEvents()`, `useEvent(id)`
+- `useCreateEvent()`, `useUpdateEvent()`, `useDeleteEvent()`
+- `useUploadEventImage()`, `useAddEventImage()`, `useDeleteEventImage()`
+Exporter dans `src/hooks/index.ts`
+
+### 4. Validation — `src/lib/validations/index.ts`
+Ajouter un schéma Zod `eventSchema` pour le formulaire de création/édition d'événement (title requis, description requise, category requis, status requis, start_date requise, location requis, les autres optionnels).
+
+### 5. Permissions — `src/lib/permissions.ts`
+Ajouter :
+- `EVENEMENTS_VIEW: 'evenements.view'` et `EVENEMENTS_MANAGE: 'evenements.manage'` dans PERMISSIONS
+- Ajouter `{ key: 'Événements', label: 'Événements' }` dans PERMISSION_CATEGORIES
+- Ajouter `'/evenements': PERMISSIONS.EVENEMENTS_VIEW` dans ROUTE_PERMISSION_MAP
+- Ajouter `{ value: '/evenements', label: 'Événements' }` dans AVAILABLE_ROUTES
+
+### 6. Sidebar — `src/components/layout/app-sidebar.tsx`
+Ajouter dans `gestionItems` (après Joueurs) :
+```ts
+{ title: "Événements", url: "/evenements", icon: CalendarDays, permission: PERMISSIONS.EVENEMENTS_VIEW }
+```
+Importer `CalendarDays` depuis lucide-react.
+
+### 7. Page liste — `src/app/(dashboard)/evenements/page.tsx`
+Page "use client" avec :
+- Titre "Événements" + bouton "Nouvel événement" (ouvre un Dialog/Sheet)
+- Table (DataTable ou @tanstack/react-table) avec colonnes : Titre, Catégorie (badge couleur), Statut (badge), Date début (formatée avec date-fns, format `fr`), Lieu, Mis en avant (check/cross), Actions (modifier, supprimer)
+- Filtres par statut et catégorie
+- Dialog de confirmation pour la suppression
+- Toast sonner pour les actions (créé, modifié, supprimé)
+
+### 8. Formulaire événement — dans un composant Dialog ou Sheet
+Formulaire react-hook-form + zod avec les champs :
+- title, subtitle, description (textarea), long_description (textarea)
+- category (select), status (select)
+- start_date (input datetime-local), end_date (input datetime-local)
+- location, price_info, is_free (checkbox), is_featured (checkbox), display_order (number)
+- tags (input texte, séparés par virgule)
+- contact_phone (input tel, numéro de contact pour l'événement, valeur par défaut '+2250799998888')
+- Upload image de couverture (cover_image_url) → upload vers bucket `event-images`
+- Section galerie : liste des images existantes avec possibilité d'ajouter/supprimer des images, caption éditable
+
+### 9. Composants UI shadcn manquants
+Si tu as besoin de composants shadcn/ui qui ne sont pas encore installés (select, textarea, checkbox, tabs, etc.), installe-les avec `npx shadcn@latest add <composant>`.
+
+## Règles strictes
+- Suis EXACTEMENT les patterns existants du projet (services, hooks, permissions, sidebar, pages)
+- Utilise les composants shadcn/ui déjà installés (card, badge, button, dialog, table, input, label, sonner, etc.)
+- Utilise date-fns avec la locale `fr` pour le formatage des dates
+- Utilise sonner (toast) pour les notifications de succès/erreur
+- Tout en français pour les labels UI
+- NE crée PAS de nouvelles tables en base, elles existent déjà
+- NE modifie PAS les tables existantes
