@@ -43,9 +43,9 @@ export default function LoginPage() {
         <div className="relative z-10 px-12">
           <div className="flex items-center gap-3 mb-8">
             <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center">
-              <span className="text-neutral-950 font-bold text-xl">P</span>
+              <span className="text-neutral-950 font-bold text-xl">D</span>
             </div>
-            <span className="text-white text-2xl font-light tracking-tight">Padel House</span>
+            <span className="text-white text-2xl font-light tracking-tight">District Club</span>
           </div>
           <h1 className="text-4xl font-light text-white leading-tight mb-4">
             Gérez vos réservations<br />
@@ -63,9 +63,9 @@ export default function LoginPage() {
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-2 mb-12">
             <div className="h-10 w-10 rounded-lg bg-neutral-950 flex items-center justify-center">
-              <span className="text-white font-bold">P</span>
+              <span className="text-white font-bold">D</span>
             </div>
-            <span className="text-neutral-950 text-xl font-light">Padel House</span>
+            <span className="text-neutral-950 text-xl font-light">District Club</span>
           </div>
 
           <div className="mb-8">

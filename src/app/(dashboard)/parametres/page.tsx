@@ -24,6 +24,7 @@ interface AppSettings {
   manual_reservation_user_id: string | null
   security_code: string
   default_tax_rate: number
+  email_notification: string
 }
 
 interface Profile {
@@ -51,7 +52,7 @@ interface PosTable {
 }
 
 const defaultSettings: AppSettings = {
-  business_name: "Padel House",
+  business_name: "District Club",
   business_phone: "",
   business_email: "",
   business_address: "",
@@ -67,6 +68,7 @@ const defaultSettings: AppSettings = {
   manual_reservation_user_id: null,
   security_code: "0451373",
   default_tax_rate: 0,
+  email_notification: "hoballahali@gmail.com",
 }
 
 export default function ParametresPage() {
@@ -123,7 +125,6 @@ export default function ParametresPage() {
         .select('*')
         .order('display_order')
       
-      console.log('Payment methods:', data, 'Error:', error)
       if (error) throw error
       setPaymentMethods(data || [])
     } catch (error) {
@@ -331,7 +332,7 @@ export default function ParametresPage() {
                         type="email"
                         value={settings.business_email ?? ''}
                         onChange={(e) => setSettings({ ...settings, business_email: e.target.value })}
-                        placeholder="contact@padelhouse.ci"
+                        placeholder="contact@districtclub.ci"
                         className="mt-1.5 w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
                       />
                     </div>
@@ -728,6 +729,18 @@ export default function ParametresPage() {
                         </div>
                       </div>
                     </label>
+
+                    <div className="pt-2">
+                      <label className="text-xs font-medium text-neutral-600 uppercase tracking-wider">Email du manager (notifications réservations)</label>
+                      <input
+                        type="email"
+                        value={settings.email_notification ?? ''}
+                        onChange={(e) => setSettings({ ...settings, email_notification: e.target.value })}
+                        placeholder="manager@districtclub.ci"
+                        className="mt-1.5 w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
+                      />
+                      <p className="text-xs text-neutral-500 mt-1">Cet email recevra une copie des notifications de réservation (confirmation / annulation)</p>
+                    </div>
 
                     <label className={cn(
                       "flex items-center justify-between p-4 rounded-lg border border-neutral-200 cursor-pointer transition-colors",

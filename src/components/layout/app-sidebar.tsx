@@ -224,9 +224,9 @@ export function AppSidebar() {
       <div className="h-16 flex items-center px-6 border-b border-neutral-800">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center">
-            <span className="text-neutral-950 font-bold text-sm">P</span>
+            <span className="text-neutral-950 font-bold text-sm">D</span>
           </div>
-          <span className="text-white font-medium">Padel House</span>
+          <span className="text-white font-medium">District Club</span>
         </div>
       </div>
 

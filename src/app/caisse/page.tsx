@@ -602,7 +602,7 @@ export default function CaissePage() {
       const { data: settings } = await supabase.from("app_settings").select("manual_reservation_user_id").eq("id", 1).single()
       const userId = settings?.manual_reservation_user_id || "fdf34d9a-5024-4f27-8e46-0f34151f7d7c"
       // Create reservation
-      const { error } = await supabase.from("reservations").insert({
+      const { data: newRes, error } = await supabase.from("reservations").insert({
         terrain_id: resModalQuickAdd.terrainId,
         time_slot_id: resModalQuickAdd.slotId,
         reservation_date: resModalDate,
@@ -610,6 +610,14 @@ export default function CaissePage() {
         client_id: clientId,
         status: "CONFIRMED",
       })
+        .select(`
+          *,
+          terrain:terrains(id, code),
+          time_slot:time_slots(id, start_time, end_time, price),
+          user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
+          client:clients(id, full_name, phone)
+        `)
+        .single()
       if (error) throw error
       toast.success("Réservation créée")
       setResModalQuickAdd(null)
@@ -1046,8 +1054,9 @@ export default function CaissePage() {
       loadData()
       loadPendingOrders()
       return orderNumber
-    } catch (error) {
-      console.error(error)
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : JSON.stringify(error)
+      console.error("createPendingOrder error:", msg, error)
       toast.error("Erreur lors de la commande")
     } finally {
       setIsProcessing(false)
@@ -1636,10 +1645,10 @@ export default function CaissePage() {
             {/* Logo */}
             <div className="flex items-center gap-3 mb-8">
               <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center">
-                <span className="text-neutral-950 font-bold">P</span>
+                <span className="text-neutral-950 font-bold">D</span>
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-white">Padel House</h1>
+                <h1 className="text-xl font-semibold text-white">District Club</h1>
                 <p className="text-sm text-neutral-500">Ouverture de caisse</p>
               </div>
             </div>
@@ -2609,7 +2618,7 @@ export default function CaissePage() {
             <div className="w-[280px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto p-5" id="ticket-preview">
                 <div className="text-center mb-4">
-                  <p className="text-lg font-bold text-neutral-900">PadelHouse</p>
+                  <p className="text-lg font-bold text-neutral-900">District Club</p>
                   <p className="text-[10px] text-neutral-400 mt-0.5">
                     {new Date(payingOrder.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}
                     {" · "}
@@ -2754,7 +2763,7 @@ export default function CaissePage() {
 </head>
 <body>
   <div class="center">
-    <div class="title">PadelHouse</div>
+    <div class="title">District Club</div>
     <div class="date">${dateStr} · ${timeStr}</div>
   </div>
   <div class="sep"></div>
@@ -3293,7 +3302,7 @@ export default function CaissePage() {
             </div>
             <div className="flex-1 overflow-y-auto p-4 bg-neutral-100">
               <div id="ticket-reprint-content" className="bg-white mx-auto shadow-sm border border-neutral-200" style={{ width: "72mm", fontFamily: "'Courier New', monospace", fontSize: "12px", padding: "4mm" }}>
-                <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "14px", marginBottom: "2px" }}>PADEL HOUSE</div>
+                <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "14px", marginBottom: "2px" }}>DISTRICT CLUB</div>
                 <div style={{ textAlign: "center", fontSize: "10px", color: "#666", marginBottom: "6px" }}>
                   {new Date(selectedTicket.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })} à {new Date(selectedTicket.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
                 </div>
@@ -3368,7 +3377,7 @@ export default function CaissePage() {
                 })()}
                 <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
                 <div style={{ textAlign: "center", fontSize: "9px", color: "#999" }}>Merci de votre visite !</div>
-                <div style={{ textAlign: "center", fontSize: "9px", color: "#999" }}>PADEL HOUSE</div>
+                <div style={{ textAlign: "center", fontSize: "9px", color: "#999" }}>DISTRICT CLUB</div>
               </div>
             </div>
           </div>
@@ -3481,7 +3490,7 @@ export default function CaissePage() {
                   </div>
                 ) : (
                   <div id="z-report-content" className="bg-white mx-auto shadow-sm border border-neutral-200" style={{ width: "72mm", fontFamily: "'Courier New', monospace", fontSize: "12px", padding: "4mm" }}>
-                    <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "14px", marginBottom: "4px" }}>PADEL HOUSE</div>
+                    <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "14px", marginBottom: "4px" }}>DISTRICT CLUB</div>
                     <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "13px", marginBottom: "2px" }}>RAPPORT Z</div>
                     <div style={{ textAlign: "center", fontSize: "10px", color: "#666" }}>{zDateLabel}</div>
                     <div style={{ textAlign: "center", fontSize: "10px", color: "#666", marginBottom: "6px" }}>{employee?.full_name || employee?.username}</div>

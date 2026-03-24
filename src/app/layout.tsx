@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Padel House - Back Office",
-  description: "Administration de Padel House",
+  title: "District Club - Back Office",
+  description: "Administration de District Club",
 };
 
 export default function RootLayout({

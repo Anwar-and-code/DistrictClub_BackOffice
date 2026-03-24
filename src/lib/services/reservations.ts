@@ -95,6 +95,81 @@ export async function updateReservationStatus(id: number, status: string) {
   return data as Reservation
 }
 
+export async function sendReservationStatusEmail(reservation: Reservation, newStatus: string) {
+  try {
+    const supabase = createClient()
+
+    // Get manager email from app_settings
+    const { data: settings } = await supabase
+      .from('app_settings')
+      .select('email_notification')
+      .eq('id', 1)
+      .single()
+
+    const managerEmail = settings?.email_notification || null
+
+    // Determine email type
+    let emailType: string | null = null
+    if (newStatus === 'CONFIRMED') emailType = 'reservation_confirmed'
+    else if (newStatus === 'CANCELED') emailType = 'reservation_canceled'
+    else return // Only send for CONFIRMED and CANCELED
+
+    // Build user name and email data
+    const terrain = reservation.terrain
+    const timeSlot = reservation.time_slot
+    const user = reservation.user
+    const client = reservation.client
+
+    const userName = client?.full_name
+      || (user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : '')
+      || 'Client'
+
+    const date = reservation.reservation_date
+      ? new Date(reservation.reservation_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+      : ''
+
+    const startTime = timeSlot?.start_time
+      ? timeSlot.start_time.slice(0, 5)
+      : ''
+
+    const emailData: Record<string, string> = {
+      terrain: terrain?.code || 'Terrain',
+      date,
+      start_time: startTime,
+    }
+
+    const title = emailType === 'reservation_confirmed'
+      ? 'Réservation confirmée'
+      : 'Réservation annulée'
+
+    const body = emailType === 'reservation_confirmed'
+      ? `Votre réservation sur ${emailData.terrain} le ${date} à ${startTime} est confirmée.`
+      : `Votre réservation sur ${emailData.terrain} le ${date} à ${startTime} a été annulée.`
+
+    // Collect extra emails (manager)
+    const extraEmails: string[] = []
+    if (managerEmail) extraEmails.push(managerEmail)
+
+    // Target: send to the reservation user (profile)
+    const targetUserIds: string[] = []
+    if (reservation.user_id) targetUserIds.push(reservation.user_id)
+
+    await supabase.functions.invoke('send-email-notification', {
+      body: {
+        type: emailType,
+        title,
+        body,
+        data: emailData,
+        target_type: targetUserIds.length === 1 ? 'single' : 'multiple',
+        target_user_ids: targetUserIds,
+        extra_emails: extraEmails,
+      },
+    })
+  } catch (err) {
+    console.error('sendReservationStatusEmail error:', err)
+  }
+}
+
 export async function deleteReservation(id: number) {
   const supabase = createClient()
   const { error } = await supabase
@@ -182,7 +257,9 @@ export async function createReservationWithClient(reservation: {
     .select(`
       *,
       terrain:terrains(id, code),
-      time_slot:time_slots(id, start_time, end_time, price)
+      time_slot:time_slots(id, start_time, end_time, price),
+      user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
+      client:clients(id, full_name, phone)
     `)
     .single()
 

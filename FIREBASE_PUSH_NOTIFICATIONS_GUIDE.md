@@ -21,11 +21,11 @@ Backoffice / DB Triggers / Cron ──> Edge Function ──> Firebase Cloud Mes
 ## Étape 1 : Créer le projet Firebase
 
 1. Aller sur **https://console.firebase.google.com**
-2. Cliquer **"Ajouter un projet"** → Nommer `PadelHouse`
+2. Cliquer **"Ajouter un projet"** → Nommer `District Club`
 3. Désactiver Google Analytics (optionnel) → **Créer le projet**
 4. **Ajouter votre app mobile** :
-   - **Android** : Cliquer l'icône Android → Package name : `com.armasoft.padelhouse`
-   - **iOS** : Cliquer l'icône iOS → Bundle ID : `com.armasoft.padelhouse`
+   - **Android** : Cliquer l'icône Android → Package name : `com.armasoft.districtclub`
+   - **iOS** : Cliquer l'icône iOS → Bundle ID : `com.armasoft.districtclub`
 5. Télécharger les fichiers de config :
    - Android : `google-services.json` → placer dans `android/app/`
    - iOS : `GoogleService-Info.plist` → placer dans le projet Xcode
@@ -36,7 +36,7 @@ Backoffice / DB Triggers / Cron ──> Edge Function ──> Firebase Cloud Mes
 
 1. Dans Firebase Console → **⚙️ Project Settings → Service Accounts**
 2. Cliquer **"Generate new private key"**
-3. Télécharger le fichier JSON (ex: `padelhouse-firebase-adminsdk-xxx.json`)
+3. Télécharger le fichier JSON (ex: `districtclub-firebase-adminsdk-xxx.json`)
 4. **Ouvrir le fichier** → Copier tout le contenu JSON
 
 ---
@@ -114,7 +114,7 @@ Fichier `android/app/src/main/AndroidManifest.xml` — ajouter dans `<applicatio
 ```xml
 <meta-data
     android:name="com.google.firebase.messaging.default_notification_channel_id"
-    android:value="padelhouse_notifications" />
+    android:value="districtclub_notifications" />
 
 <meta-data
     android:name="com.google.firebase.messaging.default_notification_icon"
@@ -220,9 +220,9 @@ class PushNotificationService {
   /// Configurer flutter_local_notifications
   Future<void> _setupLocalNotifications() async {
     const androidChannel = AndroidNotificationChannel(
-      'padelhouse_notifications',
-      'PadelHouse Notifications',
-      description: 'Notifications de PadelHouse',
+      'districtclub_notifications',
+      'District Club Notifications',
+      description: 'Notifications de District Club',
       importance: Importance.high,
     );
 
@@ -261,8 +261,8 @@ class PushNotificationService {
       notification.body,
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'padelhouse_notifications',
-          'PadelHouse Notifications',
+          'districtclub_notifications',
+          'District Club Notifications',
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
