@@ -1,4 +1,4 @@
-# Déploiement VPS - panel.districtclub.ci
+# Déploiement VPS - district.armasoft.ci
 
 ## Prérequis sur le VPS
 
@@ -82,10 +82,10 @@ docker compose logs -f
 
 ```bash
 # Copier la config Nginx
-sudo cp nginx/panel.districtclub.ci.conf /etc/nginx/sites-available/panel.districtclub.ci
+sudo cp nginx/district.armasoft.ci.conf /etc/nginx/sites-available/district.armasoft.ci
 
 # Activer le site
-sudo ln -s /etc/nginx/sites-available/panel.districtclub.ci /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/district.armasoft.ci /etc/nginx/sites-enabled/
 
 # Supprimer le site par défaut (optionnel)
 sudo rm -f /etc/nginx/sites-enabled/default
@@ -96,7 +96,7 @@ sudo rm -f /etc/nginx/sites-enabled/default
 D'abord, commenter temporairement le bloc `server` HTTPS dans la config Nginx pour que Certbot puisse fonctionner :
 
 ```bash
-sudo nano /etc/nginx/sites-available/panel.districtclub.ci
+sudo nano /etc/nginx/sites-available/district.armasoft.ci
 ```
 
 Commenter tout le bloc `server { listen 443 ... }`, puis :
@@ -109,13 +109,13 @@ sudo nginx -t
 sudo systemctl reload nginx
 
 # Obtenir le certificat SSL
-sudo certbot certonly --webroot -w /var/www/certbot -d panel.districtclub.ci
+sudo certbot certonly --webroot -w /var/www/certbot -d district.armasoft.ci
 ```
 
 Ensuite, décommenter le bloc HTTPS et recharger :
 
 ```bash
-sudo nano /etc/nginx/sites-available/panel.districtclub.ci
+sudo nano /etc/nginx/sites-available/district.armasoft.ci
 # Décommenter le bloc server 443
 
 sudo nginx -t
@@ -164,7 +164,7 @@ sudo systemctl status nginx
 ## Architecture
 
 ```
-Internet → DNS (panel.districtclub.ci)
+Internet → DNS (district.armasoft.ci)
          → VPS (IP publique)
          → Nginx (port 80/443, SSL termination)
          → Docker (port 3000, Next.js standalone)
