@@ -237,21 +237,18 @@ export async function createReservation(reservation: {
   return data as Reservation
 }
 
-const MANUAL_RESERVATION_USER_ID = 'fdf34d9a-5024-4f27-8e46-0f34151f7d7c'
+const MANUAL_RESERVATION_USER_ID = '304ab821-ba18-44f2-be5c-f3741cfa4f44'
 
 async function getManualReservationUserId(): Promise<string> {
   try {
     const supabase = createClient()
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('app_settings')
       .select('manual_reservation_user_id')
       .eq('id', 1)
-      .single()
-    
-    if (error || !data?.manual_reservation_user_id) {
-      return MANUAL_RESERVATION_USER_ID
-    }
-    return data.manual_reservation_user_id
+      .maybeSingle()
+
+    return data?.manual_reservation_user_id || MANUAL_RESERVATION_USER_ID
   } catch {
     return MANUAL_RESERVATION_USER_ID
   }

@@ -568,9 +568,11 @@ export default function CaissePage() {
       toast.error("Le numéro doit commencer par 01, 05 ou 07")
       return
     }
+    let step = ""
     try {
       // Check availability
-      const { data: existing } = await supabase
+      step = "availability"
+      const { data: existing, error: existingErr } = await supabase
         .from("reservations")
         .select("id")
         .eq("terrain_id", resModalQuickAdd.terrainId)
@@ -578,6 +580,7 @@ export default function CaissePage() {
         .eq("reservation_date", resModalDate)
         .neq("status", "CANCELED")
         .limit(1)
+      if (existingErr) throw existingErr
       if (existing && existing.length > 0) {
         toast.error("Ce créneau vient d'être réservé")
         setResModalQuickAdd(null)
@@ -585,11 +588,14 @@ export default function CaissePage() {
         return
       }
       // Get or create client
+      step = "clientLookup"
       let clientId: string
-      const { data: existingClient } = await supabase.from("clients").select("id").eq("phone", phoneDigits).single()
+      const { data: existingClient, error: lookupErr } = await supabase.from("clients").select("id").eq("phone", phoneDigits).maybeSingle()
+      if (lookupErr) throw lookupErr
       if (existingClient) {
         clientId = existingClient.id
       } else {
+        step = "clientInsert"
         const { data: newClient, error: clientErr } = await supabase
           .from("clients")
           .insert({ full_name: resModalQuickAddForm.name.trim(), phone: phoneDigits })
@@ -599,10 +605,13 @@ export default function CaissePage() {
         clientId = newClient.id
       }
       // Get manual reservation user id
-      const { data: settings } = await supabase.from("app_settings").select("manual_reservation_user_id").eq("id", 1).single()
-      const userId = settings?.manual_reservation_user_id || "fdf34d9a-5024-4f27-8e46-0f34151f7d7c"
+      step = "settings"
+      const { data: settings, error: settingsErr } = await supabase.from("app_settings").select("manual_reservation_user_id").eq("id", 1).maybeSingle()
+      if (settingsErr) throw settingsErr
+      const userId = settings?.manual_reservation_user_id || "304ab821-ba18-44f2-be5c-f3741cfa4f44"
       // Create reservation
-      const { data: newRes, error } = await supabase.from("reservations").insert({
+      step = "reservationInsert"
+      const { data: newRes, error: resErr } = await supabase.from("reservations").insert({
         terrain_id: resModalQuickAdd.terrainId,
         time_slot_id: resModalQuickAdd.slotId,
         reservation_date: resModalDate,
@@ -614,18 +623,19 @@ export default function CaissePage() {
           *,
           terrain:terrains(id, code),
           time_slot:time_slots(id, start_time, end_time, price),
-          user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
           client:clients(id, full_name, phone)
         `)
         .single()
-      if (error) throw error
+      if (resErr) throw resErr
       toast.success("Réservation créée")
       setResModalQuickAdd(null)
       setResModalQuickAddForm({ name: "", phone: "" })
       loadResModalReservations(resModalDate)
-    } catch (error) {
-      console.error(error)
-      toast.error("Erreur lors de la réservation")
+    } catch (error: unknown) {
+      const e = error && typeof error === "object" ? error as Record<string, unknown> : null
+      const msg = String(e?.message || e?.details || e?.hint || (error instanceof Error ? error.message : "Erreur lors de la réservation"))
+      console.error(`[quickAdd][${step}]`, msg, "code:", e?.code, "details:", e?.details, "hint:", e?.hint)
+      toast.error(msg)
     }
   }
 
@@ -3019,6 +3029,40 @@ export default function CaissePage() {
                 </div>
               </div>
             </div>
+
+            {/* ── NUMPAD (inline, only when virtual keyboard enabled) ── */}
+            {vkEnabled && (
+              <div className="w-[200px] bg-neutral-900 rounded-2xl shadow-2xl flex flex-col p-3 self-center">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider text-center mb-2 select-none">Clavier numérique</p>
+                {([["7","8","9"],["4","5","6"],["1","2","3"],["C","0","⌫"]] as string[][]).map((row, ri) => (
+                  <div key={ri} className="flex gap-1.5 mb-1.5 justify-center">
+                    {row.map((key) => {
+                      const isAction = key === "⌫" || key === "C"
+                      return (
+                        <button
+                          key={key}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            if (key === "C") setPayAmount("")
+                            else if (key === "⌫") setPayAmount(p => p.slice(0, -1))
+                            else setPayAmount(p => p + key)
+                            payAmountRef.current?.focus()
+                          }}
+                          className={cn(
+                            "h-12 w-16 rounded-lg font-semibold text-lg transition-all active:scale-95 select-none flex items-center justify-center",
+                            isAction
+                              ? "bg-neutral-700 hover:bg-neutral-600 text-neutral-300"
+                              : "bg-white hover:bg-neutral-200 text-neutral-900 shadow-sm"
+                          )}
+                        >
+                          {key}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3527,7 +3571,8 @@ export default function CaissePage() {
       {/* ─── Expense Modal ──────────────────────────────────────────── */}
       {showExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowExpenseModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+          <div className="flex gap-4 items-center" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[384px]">
             {/* Header */}
             <div className="px-5 pt-5 pb-4 border-b border-neutral-100 flex items-center justify-between">
               <h2 className="text-base font-bold text-neutral-900">Nouvelle dépense</h2>
@@ -3608,6 +3653,8 @@ export default function CaissePage() {
                 {isSavingExpense ? "..." : "Enregistrer"}
               </button>
             </div>
+          </div>
+          {vkEnabled && <VirtualKeyboard enabled inline />}
           </div>
         </div>
       )}
@@ -3783,7 +3830,8 @@ export default function CaissePage() {
       {/* ─── Reservation Quick Add Sub-modal ────────────────────────── */}
       {resModalQuickAdd && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={() => setResModalQuickAdd(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[400px] mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex gap-4 items-center" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[400px] overflow-hidden">
             <div className="bg-gradient-to-r from-neutral-900 to-neutral-800 px-5 py-4">
               <h3 className="font-bold text-white text-base">Nouvelle réservation</h3>
               <div className="flex items-center gap-3 mt-1.5">
@@ -3842,6 +3890,8 @@ export default function CaissePage() {
                 Réserver
               </button>
             </div>
+          </div>
+          {vkEnabled && <VirtualKeyboard enabled inline />}
           </div>
         </div>
       )}
@@ -3916,12 +3966,6 @@ export default function CaissePage() {
               )}
               {(resModalSelectedRes.status === "PENDING" || resModalSelectedRes.status === "CONFIRMED") && (
                 <>
-                  <button
-                    onClick={() => handleResModalStatusChange(resModalSelectedRes.id, "PAID")}
-                    className="w-full py-2 rounded-lg bg-emerald-500 text-white font-semibold text-sm hover:bg-emerald-600"
-                  >
-                    Marquer payé
-                  </button>
                   <button
                     onClick={() => handleResModalStatusChange(resModalSelectedRes.id, "CANCELED")}
                     className="w-full py-2 rounded-lg border border-red-300 text-red-600 font-semibold text-sm hover:bg-red-50"
@@ -4045,7 +4089,7 @@ export default function CaissePage() {
         </div>
       )}
       {/* ─── Virtual Keyboard ─────────────────────────────────────────── */}
-      <VirtualKeyboard enabled={vkEnabled} />
+      <VirtualKeyboard enabled={vkEnabled && !payingOrder && !showExpenseModal && !resModalQuickAdd} />
     </div>
   )
 }

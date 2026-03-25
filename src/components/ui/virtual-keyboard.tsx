@@ -82,9 +82,10 @@ export function useVirtualKeyboardEnabled(): [boolean, (v: boolean) => void] {
 
 interface VirtualKeyboardProps {
   enabled?: boolean
+  inline?: boolean
 }
 
-export default function VirtualKeyboard({ enabled = true }: VirtualKeyboardProps) {
+export default function VirtualKeyboard({ enabled = true, inline = false }: VirtualKeyboardProps) {
   const [visible, setVisible] = useState(false)
   const [mode, setMode] = useState<"numeric" | "text">("text")
   const [shifted, setShifted] = useState(false)
@@ -113,6 +114,7 @@ export default function VirtualKeyboard({ enabled = true }: VirtualKeyboardProps
     }
 
     const onFocusOut = (e: FocusEvent) => {
+      if (inline) return
       const related = e.relatedTarget as Element | null
       // If focus moved to the keyboard, don't hide
       if (kbRef.current?.contains(related)) return
@@ -130,11 +132,19 @@ export default function VirtualKeyboard({ enabled = true }: VirtualKeyboardProps
 
     document.addEventListener("focusin", onFocusIn)
     document.addEventListener("focusout", onFocusOut)
+    // For inline mode, detect already-focused element on mount
+    if (inline) {
+      const active = document.activeElement
+      if (shouldShowKeyboard(active)) {
+        activeRef.current = active as HTMLInputElement | HTMLTextAreaElement
+        setMode(isNumericInput(active as HTMLInputElement | HTMLTextAreaElement) ? "numeric" : "text")
+      }
+    }
     return () => {
       document.removeEventListener("focusin", onFocusIn)
       document.removeEventListener("focusout", onFocusOut)
     }
-  }, [enabled])
+  }, [enabled, inline])
 
   // ── Close keyboard manually ───────────────────────────────────
   const handleClose = useCallback(() => {
@@ -200,25 +210,31 @@ export default function VirtualKeyboard({ enabled = true }: VirtualKeyboardProps
       ref={kbRef}
       onMouseDown={preventFocusSteal}
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-[100] transition-transform duration-200 ease-out",
-        visible ? "translate-y-0" : "translate-y-full pointer-events-none"
+        inline
+          ? "bg-neutral-900 rounded-2xl shadow-2xl p-2 self-center"
+          : cn(
+              "fixed bottom-0 left-0 right-0 z-[100] transition-transform duration-200 ease-out",
+              visible ? "translate-y-0" : "translate-y-full pointer-events-none"
+            )
       )}
     >
       {/* Backdrop gradient */}
-      <div className="bg-gradient-to-t from-black/60 to-transparent h-3" />
+      {!inline && <div className="bg-gradient-to-t from-black/60 to-transparent h-3" />}
 
-      <div className="bg-neutral-900 border-t border-neutral-700 shadow-[0_-4px_20px_rgba(0,0,0,0.4)]">
+      <div className={inline ? "" : "bg-neutral-900 border-t border-neutral-700 shadow-[0_-4px_20px_rgba(0,0,0,0.4)]"}>
         {/* Top bar: close button */}
         <div className="flex items-center justify-between px-3 py-1.5">
           <span className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider select-none">
             {mode === "numeric" ? "Clavier numérique" : "Clavier"}
           </span>
-          <button
-            onClick={handleClose}
-            className="p-1 rounded-md hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {!inline && (
+            <button
+              onClick={handleClose}
+              className="p-1 rounded-md hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Keys */}
