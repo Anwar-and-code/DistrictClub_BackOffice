@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Users, Search, Eye, X, Calendar, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { Users, Search, Eye, X, Calendar, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Loader2, Plus, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import type { User, Reservation } from "@/types/database"
@@ -27,6 +27,16 @@ export default function JoueursPage() {
   const [userReservations, setUserReservations] = useState<Reservation[]>([])
   const [userStats, setUserStats] = useState<{ total: number; confirmed: number } | null>(null)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    gender: "" as "" | "M" | "F",
+    birth_date: "",
+  })
   const supabase = createClient()
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
@@ -100,6 +110,66 @@ export default function JoueursPage() {
     }
   }
 
+  const openCreateModal = () => {
+    setCreateForm({ first_name: "", last_name: "", email: "", phone: "", gender: "", birth_date: "" })
+    setShowCreateModal(true)
+  }
+
+  const handleCreatePlayer = async () => {
+    if (!createForm.first_name.trim() || !createForm.last_name.trim()) {
+      toast.error("Le prénom et le nom sont requis")
+      return
+    }
+    if (!createForm.email.trim()) {
+      toast.error("L'email est requis")
+      return
+    }
+    if (!createForm.phone.trim()) {
+      toast.error("Le téléphone est requis")
+      return
+    }
+    if (!createForm.gender) {
+      toast.error("Le genre est requis")
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const res = await fetch('/api/create-joueur', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name: createForm.first_name.trim(),
+          last_name: createForm.last_name.trim(),
+          email: createForm.email.trim().toLowerCase(),
+          phone: createForm.phone.trim(),
+          gender: createForm.gender,
+          birth_date: createForm.birth_date || null,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        if (result.error === 'duplicate_email') {
+          toast.error("Un joueur avec cet email existe déjà")
+        } else {
+          toast.error(result.message || "Erreur lors de la création du joueur")
+        }
+        return
+      }
+
+      toast.success("Joueur créé avec succès")
+      setShowCreateModal(false)
+      loadUsers(currentPage, searchQuery)
+    } catch (error) {
+      console.error('[create-joueur]', error)
+      toast.error("Erreur lors de la création du joueur")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const getFullName = (user: User) => {
     if (user.first_name && user.last_name) {
       return `${user.first_name} ${user.last_name}`
@@ -132,15 +202,24 @@ export default function JoueursPage() {
           <h1 className="text-2xl font-semibold text-neutral-950">Joueurs</h1>
           <p className="text-sm text-neutral-500 mt-1">{totalCount} joueur{totalCount > 1 ? 's' : ''} inscrit{totalCount > 1 ? 's' : ''}</p>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-          <input
-            type="text"
-            placeholder="Rechercher un joueur..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950 w-72"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Rechercher un joueur..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950 w-72"
+            />
+          </div>
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 px-4 py-2 bg-neutral-950 text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Ajouter un joueur
+          </button>
         </div>
       </div>
 
@@ -255,6 +334,118 @@ export default function JoueursPage() {
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Player Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowCreateModal(false)} />
+          <div className="relative bg-white rounded-xl w-full max-w-md mx-4 shadow-xl">
+            <div className="p-6 border-b border-neutral-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-neutral-950 flex items-center justify-center">
+                    <UserPlus className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="font-semibold text-neutral-950 text-lg">Nouveau joueur</h3>
+                </div>
+                <button onClick={() => setShowCreateModal(false)} className="text-neutral-400 hover:text-neutral-600">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">Prénom *</label>
+                  <input
+                    type="text"
+                    value={createForm.first_name}
+                    onChange={(e) => setCreateForm(f => ({ ...f, first_name: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
+                    placeholder="Prénom"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">Nom *</label>
+                  <input
+                    type="text"
+                    value={createForm.last_name}
+                    onChange={(e) => setCreateForm(f => ({ ...f, last_name: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
+                    placeholder="Nom"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-500 mb-1.5">Email *</label>
+                <input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
+                  placeholder="joueur@email.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-500 mb-1.5">Téléphone *</label>
+                <input
+                  type="tel"
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm(f => ({ ...f, phone: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
+                  placeholder="+221 77 000 00 00"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">Genre *</label>
+                  <select
+                    value={createForm.gender}
+                    onChange={(e) => setCreateForm(f => ({ ...f, gender: e.target.value as "" | "M" | "F" }))}
+                    className="w-full px-3 py-2 h-[38px] text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950 bg-white"
+                    required
+                  >
+                    <option value="">Sélectionner</option>
+                    <option value="M">Homme</option>
+                    <option value="F">Femme</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-1.5">Date de naissance</label>
+                  <input
+                    type="date"
+                    value={createForm.birth_date}
+                    onChange={(e) => setCreateForm(f => ({ ...f, birth_date: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-950"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-neutral-100 flex justify-end gap-3">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleCreatePlayer}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-neutral-950 text-white text-sm font-medium rounded-lg hover:bg-neutral-800 disabled:opacity-50 transition-colors"
+              >
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Créer le joueur
+              </button>
+            </div>
           </div>
         </div>
       )}
