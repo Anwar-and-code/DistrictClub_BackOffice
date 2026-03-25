@@ -132,39 +132,62 @@ export async function sendReservationStatusEmail(reservation: Reservation, newSt
       ? timeSlot.start_time.slice(0, 5)
       : ''
 
+    const terrainName = terrain?.code || 'Terrain'
+
     const emailData: Record<string, string> = {
-      terrain: terrain?.code || 'Terrain',
+      terrain: terrainName,
       date,
       start_time: startTime,
     }
 
-    const title = emailType === 'reservation_confirmed'
+    // --- Email pour le joueur ---
+    const playerTitle = emailType === 'reservation_confirmed'
       ? 'Réservation confirmée'
       : 'Réservation annulée'
 
-    const body = emailType === 'reservation_confirmed'
-      ? `Votre réservation sur ${emailData.terrain} le ${date} à ${startTime} est confirmée.`
-      : `Votre réservation sur ${emailData.terrain} le ${date} à ${startTime} a été annulée.`
-
-    // Collect extra emails (manager)
-    const extraEmails: string[] = []
-    if (managerEmail) extraEmails.push(managerEmail)
+    const playerBody = emailType === 'reservation_confirmed'
+      ? `Votre réservation sur ${terrainName} le ${date} à ${startTime} est confirmée.`
+      : `Votre réservation sur ${terrainName} le ${date} à ${startTime} a été annulée.`
 
     // Target: send to the reservation user (profile)
     const targetUserIds: string[] = []
     if (reservation.user_id) targetUserIds.push(reservation.user_id)
 
-    await supabase.functions.invoke('send-email-notification', {
-      body: {
-        type: emailType,
-        title,
-        body,
-        data: emailData,
-        target_type: targetUserIds.length === 1 ? 'single' : 'multiple',
-        target_user_ids: targetUserIds,
-        extra_emails: extraEmails,
-      },
-    })
+    if (targetUserIds.length > 0) {
+      await supabase.functions.invoke('send-email-notification', {
+        body: {
+          type: emailType,
+          title: playerTitle,
+          body: playerBody,
+          data: emailData,
+          target_type: targetUserIds.length === 1 ? 'single' : 'multiple',
+          target_user_ids: targetUserIds,
+        },
+      })
+    }
+
+    // --- Email pour le manager ---
+    if (managerEmail) {
+      const managerTitle = emailType === 'reservation_confirmed'
+        ? `Nouvelle réservation confirmée — ${userName}`
+        : `Réservation annulée — ${userName}`
+
+      const managerBody = emailType === 'reservation_confirmed'
+        ? `La réservation de ${userName} sur ${terrainName} le ${date} à ${startTime} a été confirmée.`
+        : `La réservation de ${userName} sur ${terrainName} le ${date} à ${startTime} a été annulée.`
+
+      await supabase.functions.invoke('send-email-notification', {
+        body: {
+          type: emailType,
+          title: managerTitle,
+          body: managerBody,
+          data: { ...emailData, client_name: userName },
+          target_type: 'single',
+          target_user_ids: [],
+          extra_emails: [managerEmail],
+        },
+      })
+    }
   } catch (err) {
     console.error('sendReservationStatusEmail error:', err)
   }
