@@ -984,13 +984,13 @@ export default function CaissePage() {
           // Log stock movement
           await supabase.from("pos_stock_movements").insert({
             product_id: item.product.id,
-            product_name: item.product.name,
             movement_type: "sale",
             quantity: item.quantity,
+            previous_stock: item.product.stock_quantity,
+            new_stock: item.product.stock_quantity - item.quantity,
             reference_type: "order",
             reference_id: order.id,
-            reference_number: orderNumber,
-            note: `Vente ${orderNumber}`,
+            notes: `Vente ${orderNumber}`,
             created_by:
               employee?.full_name || employee?.username || "Employé",
           })
@@ -1033,13 +1033,13 @@ export default function CaissePage() {
 
         await supabase.from("pos_stock_movements").insert({
           product_id: item.product.id,
-          product_name: item.product.name,
           movement_type: "sale",
           quantity: item.quantity,
+          previous_stock: item.product.stock_quantity,
+          new_stock: item.product.stock_quantity - item.quantity,
           reference_type: "order",
           reference_id: orderId,
-          reference_number: orderNumber,
-          note: `Commande ${orderNumber}`,
+          notes: `Commande ${orderNumber}`,
           created_by:
             employee?.full_name || employee?.username || "Employé",
         })

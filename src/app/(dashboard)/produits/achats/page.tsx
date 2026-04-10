@@ -37,8 +37,7 @@ interface PurchaseOrder {
   purchase_number: string
   supplier: string | null
   notes: string | null
-  total_cost: number
-  item_count: number
+  total_amount: number
   purchase_date: string
   created_by: string
   created_at: string
@@ -48,7 +47,6 @@ interface PurchaseOrderItem {
   id: number
   purchase_order_id: number
   product_id: number
-  product_name: string
   quantity: number
   unit_cost: number
   total_cost: number
@@ -170,8 +168,7 @@ export default function AchatsPage() {
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
   // ─── Stats (current page) ───────────────────────────────────────
-  const totalFiltered = orders.reduce((sum, o) => sum + o.total_cost, 0)
-  const totalItems = orders.reduce((sum, o) => sum + o.item_count, 0)
+  const totalFiltered = orders.reduce((sum, o) => sum + (o.total_amount || 0), 0)
 
   // ─── Lines management ───────────────────────────────────────────
   const addLine = () => {
@@ -270,8 +267,7 @@ export default function AchatsPage() {
           purchase_number: purchaseNumber,
           supplier: orderForm.supplier || null,
           notes: orderForm.notes || null,
-          total_cost: totalCost,
-          item_count: validLines.length,
+          total_amount: totalCost,
           purchase_date: orderForm.purchase_date,
           created_by: employee?.full_name || employee?.username || "Employé",
         })
@@ -284,7 +280,6 @@ export default function AchatsPage() {
       const items = validLines.map((l) => ({
         purchase_order_id: order.id,
         product_id: parseInt(l.product_id),
-        product_name: l.product_name || products.find((p) => p.id.toString() === l.product_id)?.name || "",
         quantity: parseInt(l.quantity),
         unit_cost: parseInt(l.unit_cost),
         total_cost: (parseInt(l.quantity) || 0) * (parseInt(l.unit_cost) || 0),
@@ -313,13 +308,13 @@ export default function AchatsPage() {
           // Stock movement entry
           await supabase.from("pos_stock_movements").insert({
             product_id: product.id,
-            product_name: product.name,
             movement_type: "entry",
             quantity: qty,
+            previous_stock: product.stock_quantity || 0,
+            new_stock: newStock,
             reference_type: "purchase",
             reference_id: order.id,
-            reference_number: purchaseNumber,
-            note: `Achat ${purchaseNumber}`,
+            notes: `Achat ${purchaseNumber}`,
             created_by: employee?.full_name || employee?.username || "Employé",
           })
         }
@@ -329,7 +324,7 @@ export default function AchatsPage() {
       loadData()
       toast.success(`Bon d'achat ${purchaseNumber} enregistré`)
     } catch (error) {
-      console.error(error)
+      console.error("handleSave error:", JSON.stringify(error, null, 2), error)
       toast.error("Erreur lors de l'enregistrement")
     } finally {
       setIsSaving(false)
@@ -465,8 +460,8 @@ export default function AchatsPage() {
               <Package className="h-4 w-4 text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-neutral-950">{totalItems}</p>
-              <p className="text-xs text-neutral-500">Articles (page)</p>
+              <p className="text-2xl font-bold text-neutral-950">{orders.length}</p>
+              <p className="text-xs text-neutral-500">Bons (page)</p>
             </div>
           </div>
         </div>
@@ -522,9 +517,6 @@ export default function AchatsPage() {
                     Fournisseur
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase">
-                    Articles
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase">
                     Total
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase">
@@ -552,11 +544,8 @@ export default function AchatsPage() {
                     <td className="px-6 py-4 text-sm text-neutral-600">
                       {order.supplier || "—"}
                     </td>
-                    <td className="px-6 py-4 text-sm font-medium text-neutral-900 text-right">
-                      {order.item_count}
-                    </td>
                     <td className="px-6 py-4 text-sm font-semibold text-neutral-950 text-right">
-                      {formatCurrency(order.total_cost)}
+                      {formatCurrency(order.total_amount)}
                     </td>
                     <td className="px-6 py-4 text-sm text-neutral-500">
                       {order.created_by}
@@ -868,7 +857,7 @@ export default function AchatsPage() {
                   {viewItems.map((item) => (
                     <tr key={item.id}>
                       <td className="py-2.5 font-medium text-neutral-900">
-                        {item.product_name}
+                        {products.find(p => p.id === item.product_id)?.name || `Produit #${item.product_id}`}
                       </td>
                       <td className="py-2.5 text-right text-neutral-600">
                         {item.quantity}
@@ -888,7 +877,7 @@ export default function AchatsPage() {
                       Total
                     </td>
                     <td className="py-3 text-right font-bold text-lg text-neutral-950">
-                      {formatCurrency(viewOrder.total_cost)}
+                      {formatCurrency(viewOrder.total_amount)}
                     </td>
                   </tr>
                 </tfoot>
@@ -912,9 +901,8 @@ export default function AchatsPage() {
               Supprimer le bon d&apos;achat ?
             </h2>
             <p className="text-sm text-neutral-500 mb-6">
-              Le bon <strong className="font-mono">{deleteModal.purchase_number}</strong> et ses{" "}
-              {deleteModal.item_count} article{deleteModal.item_count > 1 ? "s" : ""} seront
-              supprimés. Le stock sera ajusté en conséquence.
+              Le bon <strong className="font-mono">{deleteModal.purchase_number}</strong> sera
+              supprimé. Le stock sera ajusté en conséquence.
             </p>
             <div className="flex gap-3">
               <button
