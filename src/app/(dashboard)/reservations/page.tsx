@@ -72,7 +72,7 @@ export default function ReservationsPage() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [quickAdd, setQuickAdd] = useState<{ terrainId: number; slotId: number } | null>(null)
-  const [quickAddForm, setQuickAddForm] = useState({ name: "", phone: "" })
+  const [quickAddForm, setQuickAddForm] = useState({ name: "", phone: "", duration: 90 as 30 | 60 | 90 })
   const [securityCodeModal, setSecurityCodeModal] = useState<{ reservationId: number; newStatus: ReservationStatus } | null>(null)
   const [securityCodeInput, setSecurityCodeInput] = useState("")
   const [storedSecurityCode, setStoredSecurityCode] = useState<string | null>(null)
@@ -253,7 +253,7 @@ export default function ReservationsPage() {
     const amount = parseFloat(paymentAmount)
     const received = parseFloat(amountReceived) || amount
     const returned = received > amount ? received - amount : 0
-    const totalPrice = paymentModal?.time_slot?.price || 0
+    const totalPrice = paymentModal ? getEffectivePrice(paymentModal) : 0
     const currentTotal = payments.reduce((sum, p) => sum + p.amount, 0)
     
     if (currentTotal + amount > totalPrice) {
@@ -274,14 +274,14 @@ export default function ReservationsPage() {
   const getTotalPaid = () => payments.reduce((sum, p) => sum + p.amount, 0)
 
   const getRemainingAmount = () => {
-    const totalPrice = paymentModal?.time_slot?.price || 0
+    const totalPrice = paymentModal ? getEffectivePrice(paymentModal) : 0
     return totalPrice - getTotalPaid()
   }
 
   const handlePaymentSubmit = async () => {
     if (!paymentModal) return
     
-    const totalPrice = paymentModal.time_slot?.price || 0
+    const totalPrice = getEffectivePrice(paymentModal)
     const totalPaid = getTotalPaid()
     
     if (totalPaid !== totalPrice) {
@@ -318,6 +318,33 @@ export default function ReservationsPage() {
 
   const getPaymentMethodName = (id: number) => {
     return paymentMethods.find(pm => pm.id === id)?.name || "Inconnu"
+  }
+
+  const getEffectivePrice = (r: Reservation) => {
+    return r.actual_price ?? r.time_slot?.price ?? 0
+  }
+
+  const getSlotDurationMinutes = (slotId: number) => {
+    const slot = timeSlots.find(ts => ts.id === slotId)
+    if (!slot) return 60
+    const [sh, sm] = slot.start_time.split(':').map(Number)
+    const [eh, em] = slot.end_time.split(':').map(Number)
+    return (eh * 60 + em) - (sh * 60 + sm)
+  }
+
+  const getDurationOptions = (slotId: number): (30 | 60 | 90)[] => {
+    const slotDur = getSlotDurationMinutes(slotId)
+    if (slotDur <= 60) return [30, 60]
+    return [30, 60, 90]
+  }
+
+  const getPriceForDuration = (slotId: number, duration: number) => {
+    const slot = timeSlots.find(ts => ts.id === slotId)
+    if (!slot) return 0
+    const slotDur = getSlotDurationMinutes(slotId)
+    const units = slotDur / 30
+    const pricePerUnit = slot.price / units
+    return Math.round(pricePerUnit * (duration / 30))
   }
 
   const formatPhone = (phone: string) => {
@@ -626,15 +653,22 @@ export default function ReservationsPage() {
                                     {statusConfig[reservation.status].label}
                                   </span>
                                   <span className="text-sm font-bold text-gray-700">
-                                    {reservation.time_slot?.price.toLocaleString("fr-FR")} F
+                                    {getEffectivePrice(reservation).toLocaleString("fr-FR")} F
                                   </span>
+                                  {reservation.duration_minutes < getSlotDurationMinutes(reservation.time_slot_id) && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">
+                                      <Clock className="h-2.5 w-2.5" />
+                                      {reservation.duration_minutes >= 60 ? `${reservation.duration_minutes / 60}h` : `${reservation.duration_minutes}min`}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             ) : (
                               <div 
                                 onClick={() => {
                                   setQuickAdd({ terrainId: terrain.id, slotId: slot.id })
-                                  setQuickAddForm({ name: "", phone: "" })
+                                  const slotDur = getSlotDurationMinutes(slot.id)
+                                  setQuickAddForm({ name: "", phone: "", duration: (slotDur <= 60 ? 60 : 90) as 30 | 60 | 90 })
                                 }}
                                 className="h-full w-full flex items-center justify-center cursor-pointer hover:bg-gray-50 group"
                               >
@@ -714,8 +748,14 @@ export default function ReservationsPage() {
                         </td>
                         <td className="px-4 py-4">
                           <p className={cn("font-bold", isCanceled && "line-through")}>
-                            {reservation.time_slot?.price.toLocaleString("fr-FR")} F
+                            {getEffectivePrice(reservation).toLocaleString("fr-FR")} F
                           </p>
+                          {reservation.duration_minutes < getSlotDurationMinutes(reservation.time_slot_id) && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full mt-1">
+                              <Clock className="h-2.5 w-2.5" />
+                              {reservation.duration_minutes >= 60 ? `${reservation.duration_minutes / 60}h` : `${reservation.duration_minutes}min`}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-4">
                           <span className={cn(
@@ -779,9 +819,20 @@ export default function ReservationsPage() {
                 <span className="text-gray-500">Créneau</span>
                 <span className="font-semibold">{selectedReservation.time_slot && `${formatTime(selectedReservation.time_slot.start_time)} - ${formatTime(selectedReservation.time_slot.end_time)}`}</span>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Durée</span>
+                {selectedReservation.duration_minutes < getSlotDurationMinutes(selectedReservation.time_slot_id) ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
+                    <Clock className="h-3 w-3" />
+                    {selectedReservation.duration_minutes >= 60 ? `${selectedReservation.duration_minutes / 60}h` : `${selectedReservation.duration_minutes} min`}
+                  </span>
+                ) : (
+                  <span className="font-semibold">{getSlotDurationMinutes(selectedReservation.time_slot_id) >= 90 ? '1h30' : '1h'}</span>
+                )}
+              </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Prix</span>
-                <span className="font-bold text-emerald-600">{selectedReservation.time_slot?.price.toLocaleString("fr-FR")} F</span>
+                <span className="font-bold text-emerald-600">{getEffectivePrice(selectedReservation).toLocaleString("fr-FR")} F</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Statut</span>
@@ -895,7 +946,7 @@ export default function ReservationsPage() {
                   }
                 </span>
                 <span className="text-white/60 text-sm">
-                  {timeSlots.find(ts => ts.id === quickAdd.slotId)?.price?.toLocaleString("fr-FR")} F
+                  {getPriceForDuration(quickAdd.slotId, quickAddForm.duration).toLocaleString("fr-FR")} F
                 </span>
               </div>
             </div>
@@ -927,6 +978,45 @@ export default function ReservationsPage() {
                 />
                 <p className="text-xs text-neutral-400 mt-1.5">Format: 10 chiffres commençant par 01, 05 ou 07</p>
               </div>
+
+              {/* Duration Selector */}
+              <div>
+                <label className="text-sm font-medium text-neutral-700 block mb-2">
+                  Durée
+                </label>
+                {(() => {
+                  const options = getDurationOptions(quickAdd.slotId)
+                  return (
+                    <div className={cn("grid gap-2", options.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+                      {options.map((d) => {
+                        const price = getPriceForDuration(quickAdd.slotId, d)
+                        const label = d === 30 ? '30 min' : d === 60 ? '1h' : '1h30'
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setQuickAddForm(f => ({ ...f, duration: d }))}
+                            className={cn(
+                              "flex flex-col items-center gap-1 py-3 rounded-xl border-2 transition-all",
+                              quickAddForm.duration === d
+                                ? "border-neutral-900 bg-neutral-900 text-white"
+                                : "border-neutral-200 text-neutral-600 hover:border-neutral-400"
+                            )}
+                          >
+                            <span className="text-sm font-bold">{label}</span>
+                            <span className={cn(
+                              "text-xs font-medium",
+                              quickAddForm.duration === d ? "text-neutral-300" : "text-neutral-400"
+                            )}>
+                              {price.toLocaleString("fr-FR")} F
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
             </div>
             
             {/* Actions */}
@@ -934,7 +1024,7 @@ export default function ReservationsPage() {
               <button
                 onClick={() => {
                   setQuickAdd(null)
-                  setQuickAddForm({ name: "", phone: "" })
+                  setQuickAddForm({ name: "", phone: "", duration: 90 })
                 }}
                 className="flex-1 py-3 rounded-xl border-2 border-neutral-200 text-neutral-600 font-semibold hover:bg-neutral-50 transition-colors"
               >
@@ -959,16 +1049,21 @@ export default function ReservationsPage() {
                     }
                     
                     const client = await getOrCreateClient(quickAddForm.name.trim(), phoneDigits)
+                    const dur = quickAddForm.duration
+                    const slotDur = getSlotDurationMinutes(quickAdd.slotId)
+                    const actualPrice = getPriceForDuration(quickAdd.slotId, dur)
                     await createReservationWithClient({
                       terrain_id: quickAdd.terrainId,
                       time_slot_id: quickAdd.slotId,
                       reservation_date: selectedDate,
                       client_id: client.id,
-                      status: 'CONFIRMED'
+                      status: 'CONFIRMED',
+                      duration_minutes: dur,
+                      actual_price: dur < slotDur ? actualPrice : null,
                     })
                     toast.success("Réservation confirmée")
                     setQuickAdd(null)
-                    setQuickAddForm({ name: "", phone: "" })
+                    setQuickAddForm({ name: "", phone: "", duration: 90 })
                     loadReservations()
                   } catch (error) {
                     console.error(error)
@@ -1077,7 +1172,7 @@ export default function ReservationsPage() {
               <div className="flex justify-between mt-3">
                 <div>
                   <p className="text-white/80 text-xs">Total à payer</p>
-                  <p className="text-white text-xl font-bold">{paymentModal.time_slot?.price.toLocaleString("fr-FR")} F</p>
+                  <p className="text-white text-xl font-bold">{getEffectivePrice(paymentModal).toLocaleString("fr-FR")} F</p>
                 </div>
                 <div className="text-right">
                   <p className="text-white/80 text-xs">Reste à payer</p>

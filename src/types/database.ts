@@ -32,6 +32,8 @@ export interface Reservation {
   user_id: string
   client_id?: string | null
   status: ReservationStatus
+  duration_minutes: number
+  actual_price: number | null
   created_at: string
   updated_at: string
   terrain?: Terrain

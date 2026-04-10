@@ -101,6 +101,7 @@ interface PosOrder {
   table?: { name: string } | null
   terrain?: { code: string } | null
   time_slot?: { start_time: string; end_time: string; price?: number } | null
+  reservation?: { actual_price: number | null } | null
 }
 
 interface Terrain {
@@ -133,6 +134,8 @@ interface ActiveReservation {
   status: string
   user_id?: string
   client_id?: string | null
+  duration_minutes?: number
+  actual_price?: number | null
   terrain?: { id: number; code: string }
   time_slot?: { id: number; start_time: string; end_time: string; price?: number }
   user?: { id: string; first_name: string | null; last_name: string | null; email?: string; phone: string | null } | null
@@ -262,7 +265,7 @@ export default function CaissePage() {
   const [resModalReservations, setResModalReservations] = useState<ActiveReservation[]>([])
   const [resModalSelectedRes, setResModalSelectedRes] = useState<ActiveReservation | null>(null)
   const [resModalQuickAdd, setResModalQuickAdd] = useState<{ terrainId: number; slotId: number } | null>(null)
-  const [resModalQuickAddForm, setResModalQuickAddForm] = useState({ name: "", phone: "" })
+  const [resModalQuickAddForm, setResModalQuickAddForm] = useState({ name: "", phone: "", duration: 90 as 30 | 60 | 90 })
   const [resModalLoading, setResModalLoading] = useState(false)
 
   // All order payment details (order_id → [{method_name, amount}])
@@ -349,7 +352,7 @@ export default function CaissePage() {
     const today = new Date().toISOString().split("T")[0]
     const { data } = await supabase
       .from("pos_orders")
-      .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)")
+      .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price), reservation:reservations(actual_price)")
       .gte("created_at", `${today}T00:00:00`)
       .eq("status", "completed")
       .order("created_at", { ascending: false })
@@ -374,7 +377,7 @@ export default function CaissePage() {
     const { data } = await supabase
       .from("reservations")
       .select(`
-        id, reservation_date, status, created_at, terrain_id, time_slot_id, user_id, client_id,
+        id, reservation_date, status, created_at, terrain_id, time_slot_id, user_id, client_id, duration_minutes, actual_price,
         terrain:terrains(id, code),
         time_slot:time_slots(id, start_time, end_time, price),
         user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
@@ -453,9 +456,13 @@ export default function CaissePage() {
         const pmMap: Record<string, string> = { cash: "Espèces", card: "Carte", mobile_money: "Mobile", mobile: "Mobile", mixed: "Paiement multiple" }
         const methodName = pmMap[order.payment_method] || order.payment_method || "Espèces"
         let total = order.total
-        if (order.order_type === "terrain" && order.time_slot) {
-          const slot = order.time_slot as unknown as { price?: number }
-          total += slot.price || 0
+        if (order.order_type === "terrain") {
+          if (order.reservation?.actual_price != null) {
+            total += order.reservation.actual_price
+          } else if (order.time_slot) {
+            const slot = order.time_slot as unknown as { price?: number }
+            total += slot.price || 0
+          }
         }
         result[order.id] = [{ method_name: methodName, amount: total }]
       }
@@ -485,7 +492,7 @@ export default function CaissePage() {
       const [ordRes, expRes] = await Promise.all([
         supabase
           .from("pos_orders")
-          .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)")
+          .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price), reservation:reservations(actual_price)")
           .gte("created_at", `${date}T00:00:00`)
           .lt("created_at", `${nextDayStr}T00:00:00`)
           .eq("status", "completed")
@@ -512,7 +519,7 @@ export default function CaissePage() {
       const { data } = await supabase
         .from("reservations")
         .select(`
-          id, reservation_date, status, created_at, terrain_id, time_slot_id, user_id, client_id,
+          id, reservation_date, status, created_at, terrain_id, time_slot_id, user_id, client_id, duration_minutes, actual_price,
           terrain:terrains(id, code),
           time_slot:time_slots(id, start_time, end_time, price),
           user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
@@ -527,6 +534,31 @@ export default function CaissePage() {
       setResModalLoading(false)
     }
   }, [])
+
+  const getResEffectivePrice = (r: ActiveReservation) => r.actual_price ?? r.time_slot?.price ?? 0
+
+  const getSlotDurationMinutes = (slotId: number) => {
+    const slot = timeSlots.find(ts => ts.id === slotId)
+    if (!slot) return 60
+    const [sh, sm] = slot.start_time.split(':').map(Number)
+    const [eh, em] = slot.end_time.split(':').map(Number)
+    return (eh * 60 + em) - (sh * 60 + sm)
+  }
+
+  const getDurationOptions = (slotId: number): (30 | 60 | 90)[] => {
+    const slotDur = getSlotDurationMinutes(slotId)
+    if (slotDur <= 60) return [30, 60]
+    return [30, 60, 90]
+  }
+
+  const getPriceForDuration = (slotId: number, duration: number) => {
+    const slot = timeSlots.find(ts => ts.id === slotId)
+    if (!slot) return 0
+    const slotDur = getSlotDurationMinutes(slotId)
+    const units = slotDur / 30
+    const pricePerUnit = slot.price / units
+    return Math.round(pricePerUnit * (duration / 30))
+  }
 
   const getResPlayerName = (r: ActiveReservation) => {
     if (r.client?.full_name) return r.client.full_name
@@ -611,6 +643,9 @@ export default function CaissePage() {
       const userId = settings?.manual_reservation_user_id || "304ab821-ba18-44f2-be5c-f3741cfa4f44"
       // Create reservation
       step = "reservationInsert"
+      const dur = resModalQuickAddForm.duration
+      const slotDur = getSlotDurationMinutes(resModalQuickAdd.slotId)
+      const actualPrice = getPriceForDuration(resModalQuickAdd.slotId, dur)
       const { data: newRes, error: resErr } = await supabase.from("reservations").insert({
         terrain_id: resModalQuickAdd.terrainId,
         time_slot_id: resModalQuickAdd.slotId,
@@ -618,6 +653,8 @@ export default function CaissePage() {
         user_id: userId,
         client_id: clientId,
         status: "CONFIRMED",
+        duration_minutes: dur,
+        actual_price: dur < slotDur ? actualPrice : null,
       })
         .select(`
           *,
@@ -629,7 +666,7 @@ export default function CaissePage() {
       if (resErr) throw resErr
       toast.success("Réservation créée")
       setResModalQuickAdd(null)
-      setResModalQuickAddForm({ name: "", phone: "" })
+      setResModalQuickAddForm({ name: "", phone: "", duration: 90 })
       loadResModalReservations(resModalDate)
     } catch (error: unknown) {
       const e = error && typeof error === "object" ? error as Record<string, unknown> : null
@@ -654,12 +691,12 @@ export default function CaissePage() {
     if (order.reservation_id) {
       const { data: res } = await supabase
         .from("reservations")
-        .select("time_slot:time_slots(price)")
+        .select("actual_price, time_slot:time_slots(price)")
         .eq("id", order.reservation_id)
         .single()
-      if (res?.time_slot) {
-        const slot = res.time_slot as unknown as { price: number }
-        setTicketReservationPrice(slot.price || 0)
+      if (res) {
+        const slot = res.time_slot as unknown as { price: number } | null
+        setTicketReservationPrice(res.actual_price ?? slot?.price ?? 0)
       }
     }
 
@@ -732,7 +769,7 @@ export default function CaissePage() {
       openTicketDetail(orders[0] as PosOrder)
     } else {
       // No order exists — build a synthetic ticket with reservation info only
-      const slotPrice = res.time_slot?.price || 0
+      const effectivePrice = getResEffectivePrice(res)
       const syntheticOrder: PosOrder = {
         id: 0,
         order_number: "—",
@@ -752,11 +789,11 @@ export default function CaissePage() {
         client_phone: getResPlayerPhone(res),
         created_at: new Date().toISOString(),
         terrain: res.terrain ? { code: res.terrain.code } : null,
-        time_slot: res.time_slot ? { start_time: res.time_slot.start_time, end_time: res.time_slot.end_time, price: res.time_slot.price } : null,
+        time_slot: res.time_slot ? { start_time: res.time_slot.start_time, end_time: res.time_slot.end_time, price: effectivePrice } : null,
       }
       setSelectedTicket(syntheticOrder)
       setSelectedTicketItems([])
-      setTicketReservationPrice(slotPrice)
+      setTicketReservationPrice(effectivePrice)
       setSelectedTicketPayments([])
 
       // If reservation is PAID, try to load reservation_payments
@@ -1259,8 +1296,23 @@ export default function CaissePage() {
 
     // Load reservation créneau price if terrain order
     if (order.order_type === "terrain" && order.time_slot_id) {
-      const slot = timeSlots.find((s) => s.id === order.time_slot_id)
-      setReservationPrice(slot?.price || 0)
+      if (order.reservation_id) {
+        const { data: resData } = await supabase
+          .from("reservations")
+          .select("actual_price, time_slot:time_slots(price)")
+          .eq("id", order.reservation_id)
+          .single()
+        if (resData) {
+          const slot = resData.time_slot as unknown as { price: number } | null
+          setReservationPrice(resData.actual_price ?? slot?.price ?? 0)
+        } else {
+          const slot = timeSlots.find((s) => s.id === order.time_slot_id)
+          setReservationPrice(slot?.price || 0)
+        }
+      } else {
+        const slot = timeSlots.find((s) => s.id === order.time_slot_id)
+        setReservationPrice(slot?.price || 0)
+      }
     } else {
       setReservationPrice(0)
     }
@@ -1591,7 +1643,9 @@ export default function CaissePage() {
   // ─── Today Stats ────────────────────────────────────────────────
   // Helper: get terrain slot price from an order's joined time_slot
   const getOrderSlotPrice = (o: PosOrder) => {
-    if (o.order_type !== "terrain" || !o.time_slot) return 0
+    if (o.order_type !== "terrain") return 0
+    if (o.reservation?.actual_price != null) return o.reservation.actual_price
+    if (!o.time_slot) return 0
     return (o.time_slot as { start_time: string; end_time: string; price?: number }).price || 0
   }
   // Helper: full total for an order (cart products + terrain fee if applicable)
@@ -2053,7 +2107,7 @@ export default function CaissePage() {
             onClick={async () => {
               await loadTodayOrders()
               const today = new Date().toISOString().split("T")[0]
-              const { data: ord } = await supabase.from("pos_orders").select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)").gte("created_at", `${today}T00:00:00`).eq("status", "completed").order("created_at", { ascending: false })
+              const { data: ord } = await supabase.from("pos_orders").select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price), reservation:reservations(actual_price)").gte("created_at", `${today}T00:00:00`).eq("status", "completed").order("created_at", { ascending: false })
               loadAllOrderPayments(ord || [])
               loadSessionExpenses()
               setHistoryPage(0)
@@ -2070,7 +2124,7 @@ export default function CaissePage() {
           onClick={async () => {
             await loadTodayOrders()
             const today = new Date().toISOString().split("T")[0]
-            const { data: ord } = await supabase.from("pos_orders").select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)").gte("created_at", `${today}T00:00:00`).eq("status", "completed").order("created_at", { ascending: false })
+            const { data: ord } = await supabase.from("pos_orders").select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price), reservation:reservations(actual_price)").gte("created_at", `${today}T00:00:00`).eq("status", "completed").order("created_at", { ascending: false })
             loadAllOrderPayments(ord || [])
             loadSessionExpenses()
             setShowCloseSession(true)
@@ -3450,11 +3504,7 @@ export default function CaissePage() {
             }
           } else {
             const method = translatePaymentMethod(o.payment_method)
-            let total = o.total
-            if (o.order_type === "terrain" && o.time_slot) {
-              const slot = o.time_slot as unknown as { price?: number }
-              total += slot.price || 0
-            }
+            const total = o.total + getOrderSlotPrice(o)
             acc[method] = (acc[method] || 0) + total
           }
           return acc
@@ -3771,7 +3821,8 @@ export default function CaissePage() {
                                   <div
                                     onClick={() => {
                                       setResModalQuickAdd({ terrainId: t.id, slotId: slot.id })
-                                      setResModalQuickAddForm({ name: "", phone: "" })
+                                      const slotDur = getSlotDurationMinutes(slot.id)
+                                      setResModalQuickAddForm({ name: "", phone: "", duration: (slotDur <= 60 ? 60 : 90) as 30 | 60 | 90 })
                                     }}
                                     className="h-full w-full flex items-center justify-center cursor-pointer hover:bg-gray-50 group"
                                   >
@@ -3812,8 +3863,14 @@ export default function CaissePage() {
                                       {cfg.label}
                                     </span>
                                     <span className="text-sm font-bold text-gray-700">
-                                      {res.time_slot?.price ? res.time_slot.price.toLocaleString("fr-FR") + " F" : ""}
+                                      {getResEffectivePrice(res) ? getResEffectivePrice(res).toLocaleString("fr-FR") + " F" : ""}
                                     </span>
+                                    {res.duration_minutes && res.duration_minutes < getSlotDurationMinutes(res.time_slot_id) && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">
+                                        <Clock className="h-2.5 w-2.5" />
+                                        {res.duration_minutes >= 60 ? `${res.duration_minutes / 60}h` : `${res.duration_minutes}min`}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </td>
@@ -3845,7 +3902,7 @@ export default function CaissePage() {
                   {timeSlots.find(ts => ts.id === resModalQuickAdd.slotId)?.start_time.slice(0, 5)} - {timeSlots.find(ts => ts.id === resModalQuickAdd.slotId)?.end_time.slice(0, 5)}
                 </span>
                 <span className="text-white/60 text-xs">
-                  {formatCurrency(timeSlots.find(ts => ts.id === resModalQuickAdd.slotId)?.price || 0)}
+                  {formatCurrency(getPriceForDuration(resModalQuickAdd.slotId, resModalQuickAddForm.duration))}
                 </span>
               </div>
             </div>
@@ -3872,10 +3929,46 @@ export default function CaissePage() {
                 />
                 <p className="text-[10px] text-neutral-400 mt-1">Format: 10 chiffres commençant par 01, 05 ou 07</p>
               </div>
+              {/* Duration Selector */}
+              <div>
+                <label className="text-xs font-medium text-neutral-500 block mb-1.5">Durée</label>
+                {(() => {
+                  const options = getDurationOptions(resModalQuickAdd.slotId)
+                  return (
+                    <div className={cn("grid gap-2", options.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+                      {options.map((d) => {
+                        const price = getPriceForDuration(resModalQuickAdd.slotId, d)
+                        const label = d === 30 ? '30 min' : d === 60 ? '1h' : '1h30'
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setResModalQuickAddForm(f => ({ ...f, duration: d }))}
+                            className={cn(
+                              "flex flex-col items-center gap-0.5 py-2 rounded-xl border-2 transition-all",
+                              resModalQuickAddForm.duration === d
+                                ? "border-neutral-900 bg-neutral-900 text-white"
+                                : "border-neutral-200 text-neutral-600 hover:border-neutral-400"
+                            )}
+                          >
+                            <span className="text-xs font-bold">{label}</span>
+                            <span className={cn(
+                              "text-[10px] font-medium",
+                              resModalQuickAddForm.duration === d ? "text-neutral-300" : "text-neutral-400"
+                            )}>
+                              {formatCurrency(price)}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
             </div>
             <div className="px-5 pb-5 flex gap-3">
               <button
-                onClick={() => { setResModalQuickAdd(null); setResModalQuickAddForm({ name: "", phone: "" }) }}
+                onClick={() => { setResModalQuickAdd(null); setResModalQuickAddForm({ name: "", phone: "", duration: 90 }) }}
                 className="flex-1 py-2.5 rounded-xl border-2 border-neutral-200 text-neutral-600 font-semibold text-sm hover:bg-neutral-50 transition-colors"
               >
                 Annuler
@@ -3932,10 +4025,21 @@ export default function CaissePage() {
                   {resModalSelectedRes.time_slot?.start_time?.slice(0, 5)} - {resModalSelectedRes.time_slot?.end_time?.slice(0, 5)}
                 </span>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Durée</span>
+                {resModalSelectedRes.duration_minutes && resModalSelectedRes.duration_minutes < getSlotDurationMinutes(resModalSelectedRes.time_slot_id) ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+                    <Clock className="h-3 w-3" />
+                    {resModalSelectedRes.duration_minutes >= 60 ? `${resModalSelectedRes.duration_minutes / 60}h` : `${resModalSelectedRes.duration_minutes}min`}
+                  </span>
+                ) : (
+                  <span className="font-semibold">{getSlotDurationMinutes(resModalSelectedRes.time_slot_id) >= 90 ? '1h30' : '1h'}</span>
+                )}
+              </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Prix</span>
                 <span className="font-bold text-emerald-600">
-                  {resModalSelectedRes.time_slot?.price?.toLocaleString("fr-FR")} F
+                  {getResEffectivePrice(resModalSelectedRes).toLocaleString("fr-FR")} F
                 </span>
               </div>
               <div className="flex justify-between">

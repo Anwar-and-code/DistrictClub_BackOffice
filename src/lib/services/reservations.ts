@@ -38,6 +38,8 @@ export async function getReservations(filters?: {
       time_slot_id,
       user_id,
       client_id,
+      duration_minutes,
+      actual_price,
       terrain:terrains(id, code),
       time_slot:time_slots(id, start_time, end_time, price),
       user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
@@ -260,6 +262,8 @@ export async function createReservationWithClient(reservation: {
   reservation_date: string
   client_id: string
   status?: string
+  duration_minutes?: number
+  actual_price?: number | null
 }) {
   const supabase = createClient()
   const userId = await getManualReservationUserId()
@@ -273,6 +277,8 @@ export async function createReservationWithClient(reservation: {
       user_id: userId,
       client_id: reservation.client_id,
       status: reservation.status || 'CONFIRMED',
+      duration_minutes: reservation.duration_minutes || 90,
+      actual_price: reservation.actual_price ?? null,
     })
     .select(`
       *,

@@ -37,6 +37,11 @@ export default function StatistiquesPage() {
           terrain:terrains(code),
           time_slot:time_slots(start_time, end_time, price)
         `)
+
+      const getResPrice = (r: { actual_price?: number | null; time_slot?: { price?: number } | null }) => {
+        if (r.actual_price != null) return r.actual_price
+        return r.time_slot?.price || 0
+      }
       
       if (resError) throw resError
 
@@ -64,7 +69,7 @@ export default function StatistiquesPage() {
       ) || []
 
       const confirmedRes = filteredRes.filter(r => r.status === 'CONFIRMED')
-      const totalRevenue = confirmedRes.reduce((sum, r) => sum + (r.time_slot?.price || 0), 0)
+      const totalRevenue = confirmedRes.reduce((sum, r) => sum + getResPrice(r), 0)
 
       // Filter expenses by period
       const filteredExpenses = expenses?.filter(e => 
@@ -108,7 +113,7 @@ export default function StatistiquesPage() {
         if (monthlyData[key]) {
           monthlyData[key].count++
           if (r.status === 'CONFIRMED') {
-            monthlyData[key].revenue += r.time_slot?.price || 0
+            monthlyData[key].revenue += getResPrice(r)
           }
         }
       })

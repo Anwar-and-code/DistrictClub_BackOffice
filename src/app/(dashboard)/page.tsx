@@ -60,7 +60,7 @@ export default function DashboardPage() {
           { data: posExpensesData }
         ] = await Promise.all([
           supabase.from('reservations').select(`
-            id, status, reservation_date, created_at,
+            id, status, reservation_date, created_at, actual_price,
             time_slot:time_slots(start_time, end_time, price)
           `),
           supabase.from('expenses').select('expense_date, amount'),
@@ -78,6 +78,7 @@ export default function DashboardPage() {
 
         // Helper function
         const getPrice = (r: typeof reservations[0]) => {
+          if (r.actual_price != null) return r.actual_price as number
           const slot = r.time_slot as { price?: number } | null
           return slot?.price || 0
         }

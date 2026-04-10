@@ -47,9 +47,11 @@ interface PosOrder {
   employee_name: string
   client_name: string | null
   created_at: string
+  reservation_id: number | null
   payment_details: { method_name: string; amount: number }[] | null
   terrain?: { code: string } | null
   time_slot?: { start_time: string; end_time: string; price?: number } | null
+  reservation?: { actual_price: number | null } | null
 }
 
 interface SessionWithOrders extends CashSession {
@@ -111,7 +113,7 @@ export default function RapportCaissePage() {
           .order("opened_at", { ascending: false }),
         supabase
           .from("pos_orders")
-          .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price)")
+          .select("*, terrain:terrains(code), time_slot:time_slots(start_time, end_time, price), reservation:reservations(actual_price)")
           .eq("status", "completed")
           .gte("created_at", `${dateFrom}T00:00:00`)
           .lte("created_at", `${dateTo}T23:59:59`)
@@ -143,6 +145,7 @@ export default function RapportCaissePage() {
       const totalReservations = sessionOrders
         .filter((o) => o.order_type === "terrain")
         .reduce((sum, o) => {
+          if (o.reservation?.actual_price != null) return sum + o.reservation.actual_price
           const slotPrice = (o.time_slot as unknown as { price?: number })?.price || 0
           return sum + slotPrice
         }, 0)
