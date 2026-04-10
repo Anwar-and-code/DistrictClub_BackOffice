@@ -3030,12 +3030,138 @@ export default function CaissePage() {
               </div>
             </div>
 
-            {/* ── NUMPAD (inline, only when virtual keyboard enabled) ── */}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Close Session Modal ────────────────────────────────────── */}
+      {showCloseSession && currentSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="flex gap-4 mx-4 items-start">
+            {/* Left: Modal content */}
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-semibold text-neutral-950">
+                  Fermer la caisse
+                </h2>
+                <button
+                  onClick={() => setShowCloseSession(false)}
+                  className="p-2 hover:bg-neutral-100 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Session summary */}
+              <div className="bg-neutral-50 rounded-xl p-4 mb-5 space-y-2.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Fond de caisse</span>
+                  <span className="font-medium">
+                    {formatCurrency(currentSession.opening_amount)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Vente caisse</span>
+                  <span className="font-medium text-emerald-600">
+                    +{formatCurrency(todayCaisseTotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Vente Réservation</span>
+                  <span className="font-medium text-emerald-600">
+                    +{formatCurrency(todayTerrainTotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Dépenses</span>
+                  <span className="font-medium text-red-600">
+                    -{formatCurrency(todayExpensesTotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Nb tickets</span>
+                  <span className="font-medium">{todayOrders.length}</span>
+                </div>
+                <div className="flex justify-between border-t border-neutral-200 pt-2.5">
+                  <span className="font-semibold text-neutral-700">Attendu en caisse</span>
+                  <span className="font-bold text-neutral-900">
+                    {formatCurrency(currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-2 uppercase tracking-wide">
+                    Montant compté en caisse (FCFA)
+                  </label>
+                  <input
+                    type="number"
+                    value={closingAmount}
+                    onChange={(e) => setClosingAmount(e.target.value)}
+                    className="w-full px-4 py-4 text-2xl font-semibold text-center border-2 border-neutral-200 rounded-xl focus:outline-none focus:ring-0 focus:border-neutral-900"
+                    placeholder="0"
+                    autoFocus
+                  />
+                </div>
+                {closingAmount && (
+                  <div
+                    className={cn(
+                      "text-sm font-medium p-3 rounded-xl text-center",
+                      parseInt(closingAmount) ===
+                        currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
+                        ? "bg-emerald-50 text-emerald-700"
+                        : parseInt(closingAmount) <
+                            currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
+                          ? "bg-red-50 text-red-700"
+                          : "bg-amber-50 text-amber-700"
+                    )}
+                  >
+                    {parseInt(closingAmount) ===
+                    currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
+                      ? "La caisse est juste"
+                      : `Écart: ${formatCurrency(
+                          parseInt(closingAmount) -
+                            (currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal)
+                        )}`}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-neutral-500 mb-2 uppercase tracking-wide">
+                    Notes (optionnel)
+                  </label>
+                  <textarea
+                    value={closingNotes}
+                    onChange={(e) => setClosingNotes(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 resize-none text-sm"
+                    rows={2}
+                    placeholder="Remarques..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowCloseSession(false)}
+                  className="flex-1 px-4 py-3 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-xl hover:bg-neutral-200 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleCloseSession}
+                  className="flex-1 px-4 py-3 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors"
+                >
+                  Fermer la caisse
+                </button>
+              </div>
+            </div>
+
+            {/* Right: Numpad */}
             {vkEnabled && (
-              <div className="w-[200px] bg-neutral-900 rounded-2xl shadow-2xl flex flex-col p-3 self-center">
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider text-center mb-2 select-none">Clavier numérique</p>
+              <div className="w-[220px] bg-neutral-900 rounded-2xl shadow-2xl flex flex-col p-4 self-center">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider text-center mb-3 select-none">Clavier numérique</p>
                 {([["7","8","9"],["4","5","6"],["1","2","3"],["C","0","⌫"]] as string[][]).map((row, ri) => (
-                  <div key={ri} className="flex gap-1.5 mb-1.5 justify-center">
+                  <div key={ri} className="flex gap-2 mb-2 justify-center">
                     {row.map((key) => {
                       const isAction = key === "⌫" || key === "C"
                       return (
@@ -3043,13 +3169,12 @@ export default function CaissePage() {
                           key={key}
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
-                            if (key === "C") setPayAmount("")
-                            else if (key === "⌫") setPayAmount(p => p.slice(0, -1))
-                            else setPayAmount(p => p + key)
-                            payAmountRef.current?.focus()
+                            if (key === "C") setClosingAmount("")
+                            else if (key === "⌫") setClosingAmount(p => p.slice(0, -1))
+                            else setClosingAmount(p => p + key)
                           }}
                           className={cn(
-                            "h-12 w-16 rounded-lg font-semibold text-lg transition-all active:scale-95 select-none flex items-center justify-center",
+                            "h-14 w-16 rounded-lg font-semibold text-lg transition-all active:scale-95 select-none flex items-center justify-center",
                             isAction
                               ? "bg-neutral-700 hover:bg-neutral-600 text-neutral-300"
                               : "bg-white hover:bg-neutral-200 text-neutral-900 shadow-sm"
@@ -3063,128 +3188,6 @@ export default function CaissePage() {
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ─── Close Session Modal ────────────────────────────────────── */}
-      {showCloseSession && currentSession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-neutral-950">
-                Fermer la caisse
-              </h2>
-              <button
-                onClick={() => setShowCloseSession(false)}
-                className="p-2 hover:bg-neutral-100 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Session summary */}
-            <div className="bg-neutral-50 rounded-xl p-4 mb-5 space-y-2.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Fond de caisse</span>
-                <span className="font-medium">
-                  {formatCurrency(currentSession.opening_amount)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Vente caisse</span>
-                <span className="font-medium text-emerald-600">
-                  +{formatCurrency(todayCaisseTotal)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Vente Réservation</span>
-                <span className="font-medium text-emerald-600">
-                  +{formatCurrency(todayTerrainTotal)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Dépenses</span>
-                <span className="font-medium text-red-600">
-                  -{formatCurrency(todayExpensesTotal)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Nb tickets</span>
-                <span className="font-medium">{todayOrders.length}</span>
-              </div>
-              <div className="flex justify-between border-t border-neutral-200 pt-2.5">
-                <span className="font-semibold text-neutral-700">Attendu en caisse</span>
-                <span className="font-bold text-neutral-900">
-                  {formatCurrency(currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal)}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-neutral-500 mb-2 uppercase tracking-wide">
-                  Montant compté en caisse (FCFA)
-                </label>
-                <input
-                  type="number"
-                  value={closingAmount}
-                  onChange={(e) => setClosingAmount(e.target.value)}
-                  className="w-full px-4 py-4 text-2xl font-semibold text-center border-2 border-neutral-200 rounded-xl focus:outline-none focus:ring-0 focus:border-neutral-900"
-                  placeholder="0"
-                  autoFocus
-                />
-              </div>
-              {closingAmount && (
-                <div
-                  className={cn(
-                    "text-sm font-medium p-3 rounded-xl text-center",
-                    parseInt(closingAmount) ===
-                      currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
-                      ? "bg-emerald-50 text-emerald-700"
-                      : parseInt(closingAmount) <
-                          currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
-                        ? "bg-red-50 text-red-700"
-                        : "bg-amber-50 text-amber-700"
-                  )}
-                >
-                  {parseInt(closingAmount) ===
-                  currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal
-                    ? "La caisse est juste"
-                    : `Écart: ${formatCurrency(
-                        parseInt(closingAmount) -
-                          (currentSession.opening_amount + todayCaisseTotal + todayTerrainTotal - todayExpensesTotal)
-                      )}`}
-                </div>
-              )}
-              <div>
-                <label className="block text-xs font-medium text-neutral-500 mb-2 uppercase tracking-wide">
-                  Notes (optionnel)
-                </label>
-                <textarea
-                  value={closingNotes}
-                  onChange={(e) => setClosingNotes(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 resize-none text-sm"
-                  rows={2}
-                  placeholder="Remarques..."
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowCloseSession(false)}
-                className="flex-1 px-4 py-3 text-sm font-medium text-neutral-600 bg-neutral-100 rounded-xl hover:bg-neutral-200 transition-colors"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleCloseSession}
-                className="flex-1 px-4 py-3 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors"
-              >
-                Fermer la caisse
-              </button>
-            </div>
           </div>
         </div>
       )}
