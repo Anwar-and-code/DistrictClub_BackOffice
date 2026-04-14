@@ -1,19 +1,27 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { 
-  Calendar, List, ChevronLeft, ChevronRight, Phone, 
-  X, CreditCard, Eye, EyeOff, Clock, User, MapPin, CalendarDays, Lock, Plus, Wallet, Check, Gift, Loader2
+import { useEffect, useState, useMemo, useRef, useCallback } from "react"
+import {
+  Calendar, List, ChevronLeft, ChevronRight, Phone,
+  X, CreditCard, Eye, EyeOff, Clock, User, MapPin, CalendarDays, Lock, Plus, Wallet, Check, Gift, Loader2, Search, Users, GripVertical
 } from "lucide-react"
 import { toast } from "sonner"
-import { getReservations, updateReservationStatus, createReservationWithClient, isSlotAvailable } from "@/lib/services/reservations"
-import { getOrCreateClient } from "@/lib/services/clients"
+import { getReservations, updateReservationStatus, updateReservationPrice, createReservationWithClient, isSlotAvailable, moveReservation } from "@/lib/services/reservations"
+import { getOrCreateClient, searchClients } from "@/lib/services/clients"
+import { searchProfiles } from "@/lib/services/users"
 import { getTerrains } from "@/lib/services/terrains"
 import { getTimeSlots } from "@/lib/services/time-slots"
 import { createClient } from "@/lib/supabase/client"
-import type { Reservation, Terrain, TimeSlot, ReservationStatus, ClientPackage } from "@/types/database"
+import type { Reservation, Terrain, TimeSlot, ReservationStatus, ClientPackage, User as UserType, Client } from "@/types/database"
 import { getActiveClientPackagesForUser, addPackageSession, getPackageTimeSlotIdsForPackage } from "@/lib/services/packages"
 import { cn } from "@/lib/utils"
+
+type SearchResult = {
+  type: 'profile' | 'client'
+  id: string
+  name: string
+  phone: string | null
+}
 
 type ViewMode = "calendar" | "list"
 
@@ -72,7 +80,17 @@ export default function ReservationsPage() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [quickAdd, setQuickAdd] = useState<{ terrainId: number; slotId: number } | null>(null)
-  const [quickAddForm, setQuickAddForm] = useState({ name: "", phone: "", duration: 90 as 30 | 60 | 90 })
+  const [quickAddForm, setQuickAddForm] = useState({ name: "", phone: "", duration: 90 as 30 | 60 | 90, customPrice: "", timeRange: "" })
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showResults, setShowResults] = useState(false)
+  const [selectedContact, setSelectedContact] = useState<SearchResult | null>(null)
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
+  const [editingPrice, setEditingPrice] = useState(false)
+  const [editPriceValue, setEditPriceValue] = useState("")
+  const [draggedReservation, setDraggedReservation] = useState<Reservation | null>(null)
+  const [dragOverCell, setDragOverCell] = useState<{ terrainId: number; slotId: number } | null>(null)
   const [securityCodeModal, setSecurityCodeModal] = useState<{ reservationId: number; newStatus: ReservationStatus } | null>(null)
   const [securityCodeInput, setSecurityCodeInput] = useState("")
   const [storedSecurityCode, setStoredSecurityCode] = useState<string | null>(null)
@@ -146,6 +164,123 @@ export default function ReservationsPage() {
   useEffect(() => {
     loadReservations()
   }, [selectedDate])
+
+  // Search profiles + clients for autocomplete
+  const handleSearchContact = useCallback(async (query: string) => {
+    if (query.length < 3) {
+      setSearchResults([])
+      setShowResults(false)
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      const [profiles, clients] = await Promise.all([
+        searchProfiles(query),
+        searchClients(query),
+      ])
+
+      const results: SearchResult[] = []
+
+      // Profiles first
+      for (const p of profiles) {
+        const name = [p.first_name, p.last_name].filter(Boolean).join(' ')
+        if (name) {
+          results.push({ type: 'profile', id: p.id, name, phone: p.phone })
+        }
+      }
+
+      // Then clients (avoid duplicates by phone)
+      const profilePhones = new Set(profiles.map(p => p.phone).filter(Boolean))
+      for (const c of clients) {
+        if (!profilePhones.has(c.phone)) {
+          results.push({ type: 'client', id: c.id, name: c.full_name, phone: c.phone })
+        }
+      }
+
+      setSearchResults(results.slice(0, 5))
+      setShowResults(results.length > 0)
+    } catch {
+      // silently ignore search errors
+    } finally {
+      setIsSearching(false)
+    }
+  }, [])
+
+  // Drag helpers
+  const isDraggable = (r: Reservation) => {
+    if (r.status === 'CANCELED' || r.status === 'EXPIRED') return false
+    return r.duration_minutes === getSlotDurationMinutes(r.time_slot_id)
+  }
+
+  const handleDragStart = (e: React.DragEvent, r: Reservation) => {
+    setDraggedReservation(r)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(r.id))
+    // Make ghost semi-transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4'
+    }
+  }
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1'
+    }
+    setDraggedReservation(null)
+    setDragOverCell(null)
+  }
+
+  const handleDragOver = (e: React.DragEvent, terrainId: number, slotId: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverCell({ terrainId, slotId })
+  }
+
+  const handleDragLeave = () => {
+    setDragOverCell(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent, terrainId: number, slotId: number) => {
+    e.preventDefault()
+    setDragOverCell(null)
+
+    if (!draggedReservation) return
+    // Same cell → do nothing
+    if (draggedReservation.terrain_id === terrainId && draggedReservation.time_slot_id === slotId) {
+      setDraggedReservation(null)
+      return
+    }
+
+    // Check destination is free
+    const existingRes = getReservation(terrainId, slotId)
+    if (existingRes) {
+      toast.error("Ce créneau est déjà occupé")
+      setDraggedReservation(null)
+      return
+    }
+
+    try {
+      await moveReservation(draggedReservation.id, terrainId, slotId)
+      toast.success("Réservation déplacée")
+      loadReservations()
+    } catch (error) {
+      console.error(error)
+      toast.error("Erreur lors du déplacement")
+    }
+    setDraggedReservation(null)
+  }
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowResults(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Load active packages when a reservation is selected
   useEffect(() => {
@@ -345,6 +480,24 @@ export default function ReservationsPage() {
     const units = slotDur / 30
     const pricePerUnit = slot.price / units
     return Math.round(pricePerUnit * (duration / 30))
+  }
+
+  const getTimeRangeOptions = (slotId: number, duration: number) => {
+    const slot = timeSlots.find(ts => ts.id === slotId)
+    if (!slot) return []
+    const [sh, sm] = slot.start_time.split(':').map(Number)
+    const [eh, em] = slot.end_time.split(':').map(Number)
+    const slotStartMin = sh * 60 + sm
+    const slotEndMin = eh * 60 + em
+    const options: { start: string; end: string; label: string }[] = []
+
+    for (let s = slotStartMin; s + duration <= slotEndMin; s += 30) {
+      const eMin = s + duration
+      const startStr = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+      const endStr = `${String(Math.floor(eMin / 60)).padStart(2, '0')}:${String(eMin % 60).padStart(2, '0')}`
+      options.push({ start: startStr, end: endStr, label: `${startStr} - ${endStr}` })
+    }
+    return options
   }
 
   const formatPhone = (phone: string) => {
@@ -604,13 +757,19 @@ export default function ReservationsPage() {
                         const isQuickAddOpen = quickAdd?.terrainId === terrain.id && quickAdd?.slotId === slot.id
                         
                         return (
-                          <td 
-                            key={terrain.id} 
-                            className="border-b border-r border-gray-200 p-0 h-16 last:border-r-0 relative overflow-visible"
+                          <td
+                            key={terrain.id}
+                            className={cn(
+                              "border-b border-r border-gray-200 p-0 h-16 last:border-r-0 relative overflow-visible",
+                              dragOverCell?.terrainId === terrain.id && dragOverCell?.slotId === slot.id && !reservation && "ring-2 ring-inset ring-blue-500 bg-blue-50"
+                            )}
+                            onDragOver={!reservation ? (e) => handleDragOver(e, terrain.id, slot.id) : undefined}
+                            onDragLeave={!reservation ? handleDragLeave : undefined}
+                            onDrop={!reservation ? (e) => handleDrop(e, terrain.id, slot.id) : undefined}
                           >
                             {/* Current time indicator line */}
                             {getCurrentTimePosition?.slotIndex === slotIndex && (
-                              <div 
+                              <div
                                 className="absolute left-0 right-0 z-10 pointer-events-none"
                                 style={{ top: `${getCurrentTimePosition.progress * 100}%` }}
                               >
@@ -619,13 +778,20 @@ export default function ReservationsPage() {
                             )}
                             {reservation && config ? (
                               <div
+                                draggable={isDraggable(reservation)}
+                                onDragStart={isDraggable(reservation) ? (e) => handleDragStart(e, reservation) : undefined}
+                                onDragEnd={isDraggable(reservation) ? handleDragEnd : undefined}
                                 onClick={() => setSelectedReservation(reservation)}
                                 className={cn(
                                   "h-full w-full cursor-pointer px-3 py-2 flex items-center justify-between",
                                   config.bg,
-                                  reservation.status === "CANCELED" && "opacity-50"
+                                  reservation.status === "CANCELED" && "opacity-50",
+                                  isDraggable(reservation) && "cursor-grab active:cursor-grabbing"
                                 )}
                               >
+                                {isDraggable(reservation) && (
+                                  <GripVertical className="h-4 w-4 text-gray-400 flex-shrink-0 mr-1" />
+                                )}
                                 <div className="min-w-0 flex-1">
                                   <p className={cn(
                                     "font-bold text-base truncate",
@@ -656,23 +822,34 @@ export default function ReservationsPage() {
                                     {getEffectivePrice(reservation).toLocaleString("fr-FR")} F
                                   </span>
                                   {reservation.duration_minutes < getSlotDurationMinutes(reservation.time_slot_id) && (
-                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-orange-600 bg-orange-500/10 px-1.5 py-0.5 rounded-full border border-orange-300">
                                       <Clock className="h-2.5 w-2.5" />
-                                      {reservation.duration_minutes >= 60 ? `${reservation.duration_minutes / 60}h` : `${reservation.duration_minutes}min`}
+                                      {reservation.custom_start_time && reservation.custom_end_time
+                                        ? `${reservation.custom_start_time.slice(0,5)} - ${reservation.custom_end_time.slice(0,5)}`
+                                        : reservation.duration_minutes >= 60 ? `${reservation.duration_minutes / 60}h` : `${reservation.duration_minutes}min`
+                                      }
                                     </span>
                                   )}
                                 </div>
                               </div>
                             ) : (
-                              <div 
+                              <div
                                 onClick={() => {
+                                  if (draggedReservation) return
                                   setQuickAdd({ terrainId: terrain.id, slotId: slot.id })
                                   const slotDur = getSlotDurationMinutes(slot.id)
-                                  setQuickAddForm({ name: "", phone: "", duration: (slotDur <= 60 ? 60 : 90) as 30 | 60 | 90 })
+                                  setQuickAddForm({ name: "", phone: "", duration: (slotDur <= 60 ? 60 : 90) as 30 | 60 | 90, customPrice: "", timeRange: "" })
                                 }}
-                                className="h-full w-full flex items-center justify-center cursor-pointer hover:bg-gray-50 group"
+                                className={cn(
+                                  "h-full w-full flex items-center justify-center cursor-pointer hover:bg-gray-50 group",
+                                  dragOverCell?.terrainId === terrain.id && dragOverCell?.slotId === slot.id && "bg-blue-50"
+                                )}
                               >
-                                <span className="text-gray-300 group-hover:text-gray-400 text-xl font-light">+</span>
+                                {dragOverCell?.terrainId === terrain.id && dragOverCell?.slotId === slot.id ? (
+                                  <span className="text-blue-500 text-sm font-medium">Déposer ici</span>
+                                ) : (
+                                  <span className="text-gray-300 group-hover:text-gray-400 text-xl font-light">+</span>
+                                )}
                               </div>
                             )}
                           </td>
@@ -751,9 +928,12 @@ export default function ReservationsPage() {
                             {getEffectivePrice(reservation).toLocaleString("fr-FR")} F
                           </p>
                           {reservation.duration_minutes < getSlotDurationMinutes(reservation.time_slot_id) && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full mt-1">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-orange-600 bg-orange-500/10 px-1.5 py-0.5 rounded-full mt-1 border border-orange-300">
                               <Clock className="h-2.5 w-2.5" />
-                              {reservation.duration_minutes >= 60 ? `${reservation.duration_minutes / 60}h` : `${reservation.duration_minutes}min`}
+                              {reservation.custom_start_time && reservation.custom_end_time
+                                ? `${reservation.custom_start_time.slice(0,5)} - ${reservation.custom_end_time.slice(0,5)}`
+                                : reservation.duration_minutes >= 60 ? `${reservation.duration_minutes / 60}h` : `${reservation.duration_minutes}min`
+                              }
                             </span>
                           )}
                         </td>
@@ -788,7 +968,7 @@ export default function ReservationsPage() {
       {selectedReservation && (
         <div 
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-          onClick={() => setSelectedReservation(null)}
+          onClick={() => { setSelectedReservation(null); setEditingPrice(false) }}
         >
           <div 
             className="bg-white rounded-lg shadow-lg w-80"
@@ -800,7 +980,7 @@ export default function ReservationsPage() {
                 <span className="text-xs text-gray-400">#{selectedReservation.id}</span>
                 <h3 className="font-bold text-gray-900">{getPlayerName(selectedReservation)}</h3>
               </div>
-              <button onClick={() => setSelectedReservation(null)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setSelectedReservation(null); setEditingPrice(false) }} className="text-gray-400 hover:text-gray-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -822,17 +1002,87 @@ export default function ReservationsPage() {
               <div className="flex justify-between items-center">
                 <span className="text-gray-500">Durée</span>
                 {selectedReservation.duration_minutes < getSlotDurationMinutes(selectedReservation.time_slot_id) ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
-                    <Clock className="h-3 w-3" />
-                    {selectedReservation.duration_minutes >= 60 ? `${selectedReservation.duration_minutes / 60}h` : `${selectedReservation.duration_minutes} min`}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-500/10 px-2 py-1 rounded-full border border-orange-300">
+                      <Clock className="h-3 w-3" />
+                      {selectedReservation.duration_minutes >= 60 ? `${selectedReservation.duration_minutes / 60}h` : `${selectedReservation.duration_minutes} min`}
+                    </span>
+                    {selectedReservation.custom_start_time && selectedReservation.custom_end_time && (
+                      <span className="text-xs font-bold text-orange-700">
+                        {selectedReservation.custom_start_time.slice(0,5)} - {selectedReservation.custom_end_time.slice(0,5)}
+                      </span>
+                    )}
+                  </div>
                 ) : (
                   <span className="font-semibold">{getSlotDurationMinutes(selectedReservation.time_slot_id) >= 90 ? '1h30' : '1h'}</span>
                 )}
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-gray-500">Prix</span>
-                <span className="font-bold text-emerald-600">{getEffectivePrice(selectedReservation).toLocaleString("fr-FR")} F</span>
+                {editingPrice ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      value={editPriceValue}
+                      onChange={e => setEditPriceValue(e.target.value)}
+                      className="w-24 px-2 py-1 text-sm font-mono border border-neutral-300 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                      autoFocus
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter') {
+                          const newPrice = parseInt(editPriceValue)
+                          if (!isNaN(newPrice) && newPrice >= 0) {
+                            try {
+                              await updateReservationPrice(selectedReservation.id, newPrice)
+                              toast.success("Prix modifié")
+                              loadReservations()
+                              setSelectedReservation({ ...selectedReservation, actual_price: newPrice })
+                            } catch {
+                              toast.error("Erreur lors de la modification")
+                            }
+                          }
+                          setEditingPrice(false)
+                        }
+                        if (e.key === 'Escape') setEditingPrice(false)
+                      }}
+                    />
+                    <span className="text-xs text-neutral-400">F</span>
+                    <button
+                      onClick={async () => {
+                        const newPrice = parseInt(editPriceValue)
+                        if (!isNaN(newPrice) && newPrice >= 0) {
+                          try {
+                            await updateReservationPrice(selectedReservation.id, newPrice)
+                            toast.success("Prix modifié")
+                            loadReservations()
+                            setSelectedReservation({ ...selectedReservation, actual_price: newPrice })
+                          } catch {
+                            toast.error("Erreur lors de la modification")
+                          }
+                        }
+                        setEditingPrice(false)
+                      }}
+                      className="p-1 rounded bg-neutral-900 text-white hover:bg-neutral-700"
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => setEditingPrice(false)}
+                      className="p-1 rounded border border-neutral-300 text-neutral-500 hover:bg-neutral-100"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditPriceValue(String(getEffectivePrice(selectedReservation)))
+                      setEditingPrice(true)
+                    }}
+                    className="font-bold text-emerald-600 hover:underline cursor-pointer"
+                  >
+                    {getEffectivePrice(selectedReservation).toLocaleString("fr-FR")} F
+                  </button>
+                )}
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Statut</span>
@@ -902,20 +1152,12 @@ export default function ReservationsPage() {
                   </button>
                 )}
                 {(selectedReservation.status === "PENDING" || selectedReservation.status === "CONFIRMED") && (
-                  <>
-                    <button
-                      onClick={() => openPaymentModal(selectedReservation)}
-                      className="w-full py-2 rounded bg-emerald-500 text-white font-semibold hover:bg-emerald-600"
-                    >
-                      Marquer payé
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(selectedReservation.id, "CANCELED")}
-                      className="w-full py-2 rounded border border-red-300 text-red-600 font-semibold hover:bg-red-50"
-                    >
-                      Annuler
-                    </button>
-                  </>
+                  <button
+                    onClick={() => handleStatusChange(selectedReservation.id, "CANCELED")}
+                    className="w-full py-2 rounded border border-red-300 text-red-600 font-semibold hover:bg-red-50"
+                  >
+                    Annuler
+                  </button>
                 )}
               </div>
             )}
@@ -953,31 +1195,125 @@ export default function ReservationsPage() {
             
             {/* Form */}
             <div className="p-6 space-y-5">
-              <div>
+              {/* Search autocomplete */}
+              <div ref={searchContainerRef} className="relative">
                 <label className="text-sm font-medium text-neutral-700 block mb-2">
-                  Nom du client <span className="text-red-500">*</span>
+                  Rechercher un joueur <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={quickAddForm.name}
-                  onChange={e => setQuickAddForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Prénom Nom"
-                  className="w-full px-4 py-3 border border-neutral-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
-                />
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={quickAddForm.name}
+                    onChange={e => {
+                      const val = e.target.value
+                      setQuickAddForm(f => ({ ...f, name: val }))
+                      if (selectedContact) {
+                        setSelectedContact(null)
+                        setQuickAddForm(f => ({ ...f, phone: "" }))
+                      }
+                      if (searchTimeout.current) clearTimeout(searchTimeout.current)
+                      searchTimeout.current = setTimeout(() => handleSearchContact(val), 300)
+                    }}
+                    onFocus={() => {
+                      if (searchResults.length > 0 && !selectedContact) setShowResults(true)
+                    }}
+                    placeholder="Nom, prénom ou téléphone..."
+                    className="w-full pl-10 pr-4 py-3 border border-neutral-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
+                  />
+                  {isSearching && (
+                    <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 animate-spin" />
+                  )}
+                </div>
+
+                {/* Selected contact badge */}
+                {selectedContact && (
+                  <div className="mt-2 flex items-center gap-2 bg-neutral-100 rounded-lg px-3 py-2">
+                    <span className={cn(
+                      "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded",
+                      selectedContact.type === 'profile'
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-amber-100 text-amber-700"
+                    )}>
+                      {selectedContact.type === 'profile' ? 'Membre' : 'Client'}
+                    </span>
+                    <span className="text-sm font-medium text-neutral-800 flex-1">{selectedContact.name}</span>
+                    {selectedContact.phone && (
+                      <span className="text-xs text-neutral-500 font-mono">{selectedContact.phone}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedContact(null)
+                        setQuickAddForm(f => ({ ...f, name: "", phone: "" }))
+                      }}
+                      className="text-neutral-400 hover:text-neutral-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Autocomplete dropdown */}
+                {showResults && !selectedContact && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-neutral-200 rounded-xl shadow-lg overflow-hidden">
+                    {searchResults.map((r) => (
+                      <button
+                        key={`${r.type}-${r.id}`}
+                        type="button"
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 transition-colors text-left border-b border-neutral-100 last:border-0"
+                        onClick={() => {
+                          setSelectedContact(r)
+                          setQuickAddForm(f => ({ ...f, name: r.name, phone: r.phone || "" }))
+                          setShowResults(false)
+                        }}
+                      >
+                        <div className={cn(
+                          "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0",
+                          r.type === 'profile' ? "bg-blue-100" : "bg-amber-100"
+                        )}>
+                          {r.type === 'profile'
+                            ? <User className="h-4 w-4 text-blue-600" />
+                            : <Users className="h-4 w-4 text-amber-600" />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-neutral-900 truncate">{r.name}</div>
+                          {r.phone && (
+                            <div className="text-xs text-neutral-500 font-mono">{r.phone}</div>
+                          )}
+                        </div>
+                        <span className={cn(
+                          "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0",
+                          r.type === 'profile'
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-amber-100 text-amber-700"
+                        )}>
+                          {r.type === 'profile' ? 'Membre' : 'Client'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-neutral-400 mt-1.5">Min. 3 caractères pour rechercher</p>
               </div>
-              <div>
-                <label className="text-sm font-medium text-neutral-700 block mb-2">
-                  Téléphone <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  value={quickAddForm.phone}
-                  onChange={e => setQuickAddForm(f => ({ ...f, phone: e.target.value }))}
-                  placeholder="07 XX XX XX XX"
-                  className="w-full px-4 py-3 border border-neutral-200 rounded-xl text-base font-mono focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
-                />
-                <p className="text-xs text-neutral-400 mt-1.5">Format: 10 chiffres commençant par 01, 05 ou 07</p>
-              </div>
+
+              {/* Phone - shown when no contact selected or manual entry */}
+              {!selectedContact && (
+                <div>
+                  <label className="text-sm font-medium text-neutral-700 block mb-2">
+                    Téléphone <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={quickAddForm.phone}
+                    onChange={e => setQuickAddForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="07 XX XX XX XX"
+                    className="w-full px-4 py-3 border border-neutral-200 rounded-xl text-base font-mono focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
+                  />
+                  <p className="text-xs text-neutral-400 mt-1.5">Format: 10 chiffres commençant par 01, 05 ou 07</p>
+                </div>
+              )}
 
               {/* Duration Selector */}
               <div>
@@ -995,7 +1331,7 @@ export default function ReservationsPage() {
                           <button
                             key={d}
                             type="button"
-                            onClick={() => setQuickAddForm(f => ({ ...f, duration: d }))}
+                            onClick={() => setQuickAddForm(f => ({ ...f, duration: d, timeRange: "" }))}
                             className={cn(
                               "flex flex-col items-center gap-1 py-3 rounded-xl border-2 transition-all",
                               quickAddForm.duration === d
@@ -1017,28 +1353,82 @@ export default function ReservationsPage() {
                   )
                 })()}
               </div>
+
+              {/* Time Range Selector — only when duration < slot */}
+              {quickAddForm.duration < getSlotDurationMinutes(quickAdd.slotId) && (() => {
+                const ranges = getTimeRangeOptions(quickAdd.slotId, quickAddForm.duration)
+                return (
+                  <div>
+                    <label className="text-sm font-medium text-neutral-700 block mb-2">
+                      Horaire <span className="text-red-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ranges.map(r => (
+                        <button
+                          key={r.start}
+                          type="button"
+                          onClick={() => setQuickAddForm(f => ({ ...f, timeRange: `${r.start}-${r.end}` }))}
+                          className={cn(
+                            "flex items-center justify-center gap-1.5 py-3 rounded-xl border-2 transition-all text-sm font-bold",
+                            quickAddForm.timeRange === `${r.start}-${r.end}`
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-neutral-200 text-neutral-600 hover:border-orange-300"
+                          )}
+                        >
+                          <Clock className="h-3.5 w-3.5" />
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                    {!quickAddForm.timeRange && (
+                      <p className="text-xs text-red-500 mt-1.5">Veuillez choisir un horaire</p>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {/* Custom Price */}
+              <div>
+                <label className="text-sm font-medium text-neutral-700 block mb-2">
+                  Prix personnalisé <span className="text-neutral-400 font-normal">(optionnel)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={quickAddForm.customPrice}
+                    onChange={e => setQuickAddForm(f => ({ ...f, customPrice: e.target.value }))}
+                    placeholder={getPriceForDuration(quickAdd.slotId, quickAddForm.duration).toLocaleString("fr-FR")}
+                    className="w-full px-4 py-3 pr-10 border border-neutral-200 rounded-xl text-base font-mono focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-neutral-400">F</span>
+                </div>
+                <p className="text-xs text-neutral-400 mt-1.5">
+                  Laisser vide pour le prix par défaut ({getPriceForDuration(quickAdd.slotId, quickAddForm.duration).toLocaleString("fr-FR")} F)
+                </p>
+              </div>
             </div>
-            
+
             {/* Actions */}
             <div className="px-6 pb-6 flex gap-3">
               <button
                 onClick={() => {
                   setQuickAdd(null)
-                  setQuickAddForm({ name: "", phone: "", duration: 90 })
+                  setQuickAddForm({ name: "", phone: "", duration: 90, customPrice: "", timeRange: "" })
+                  setSelectedContact(null)
+                  setSearchResults([])
+                  setShowResults(false)
                 }}
                 className="flex-1 py-3 rounded-xl border-2 border-neutral-200 text-neutral-600 font-semibold hover:bg-neutral-50 transition-colors"
               >
                 Annuler
               </button>
               <button
-                disabled={!quickAddForm.name.trim() || quickAddForm.phone.replace(/\D/g, '').length !== 10}
+                disabled={
+                  !quickAddForm.name.trim() ||
+                  (!selectedContact && quickAddForm.phone.replace(/\D/g, '').length !== 10) ||
+                  (quickAddForm.duration < getSlotDurationMinutes(quickAdd.slotId) && !quickAddForm.timeRange)
+                }
                 onClick={async () => {
-                  const phoneDigits = quickAddForm.phone.replace(/\D/g, '')
-                  if (!phoneDigits.startsWith('01') && !phoneDigits.startsWith('05') && !phoneDigits.startsWith('07')) {
-                    toast.error("Le numéro doit commencer par 01, 05 ou 07")
-                    return
-                  }
-                  
                   try {
                     const available = await isSlotAvailable(quickAdd.terrainId, quickAdd.slotId, selectedDate)
                     if (!available) {
@@ -1047,23 +1437,51 @@ export default function ReservationsPage() {
                       loadReservations()
                       return
                     }
-                    
-                    const client = await getOrCreateClient(quickAddForm.name.trim(), phoneDigits)
+
                     const dur = quickAddForm.duration
                     const slotDur = getSlotDurationMinutes(quickAdd.slotId)
-                    const actualPrice = getPriceForDuration(quickAdd.slotId, dur)
-                    await createReservationWithClient({
+                    const defaultPrice = getPriceForDuration(quickAdd.slotId, dur)
+                    const finalPrice = quickAddForm.customPrice ? parseInt(quickAddForm.customPrice) : (dur < slotDur ? defaultPrice : null)
+
+                    // Parse custom time range if partial duration
+                    let customStart: string | null = null
+                    let customEnd: string | null = null
+                    if (dur < slotDur && quickAddForm.timeRange) {
+                      const [s, e] = quickAddForm.timeRange.split('-')
+                      customStart = s
+                      customEnd = e
+                    }
+
+                    const commonFields = {
                       terrain_id: quickAdd.terrainId,
                       time_slot_id: quickAdd.slotId,
                       reservation_date: selectedDate,
-                      client_id: client.id,
-                      status: 'CONFIRMED',
+                      status: 'CONFIRMED' as const,
                       duration_minutes: dur,
-                      actual_price: dur < slotDur ? actualPrice : null,
-                    })
+                      actual_price: finalPrice,
+                      custom_start_time: customStart,
+                      custom_end_time: customEnd,
+                    }
+
+                    if (selectedContact?.type === 'profile') {
+                      await createReservationWithClient({ ...commonFields, user_id: selectedContact.id })
+                    } else if (selectedContact?.type === 'client') {
+                      await createReservationWithClient({ ...commonFields, client_id: selectedContact.id })
+                    } else {
+                      const phoneDigits = quickAddForm.phone.replace(/\D/g, '')
+                      if (!phoneDigits.startsWith('01') && !phoneDigits.startsWith('05') && !phoneDigits.startsWith('07')) {
+                        toast.error("Le numéro doit commencer par 01, 05 ou 07")
+                        return
+                      }
+                      const client = await getOrCreateClient(quickAddForm.name.trim(), phoneDigits)
+                      await createReservationWithClient({ ...commonFields, client_id: client.id })
+                    }
+
                     toast.success("Réservation confirmée")
                     setQuickAdd(null)
-                    setQuickAddForm({ name: "", phone: "", duration: 90 })
+                    setQuickAddForm({ name: "", phone: "", duration: 90, customPrice: "", timeRange: "" })
+                    setSelectedContact(null)
+                    setSearchResults([])
                     loadReservations()
                   } catch (error) {
                     console.error(error)
@@ -1072,7 +1490,9 @@ export default function ReservationsPage() {
                 }}
                 className={cn(
                   "flex-1 py-3 rounded-xl font-semibold transition-all",
-                  quickAddForm.name.trim() && quickAddForm.phone.replace(/\D/g, '').length === 10
+                  quickAddForm.name.trim()
+                    && (selectedContact || quickAddForm.phone.replace(/\D/g, '').length === 10)
+                    && (quickAddForm.duration >= getSlotDurationMinutes(quickAdd.slotId) || quickAddForm.timeRange)
                     ? "bg-neutral-900 text-white hover:bg-neutral-800"
                     : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                 )}

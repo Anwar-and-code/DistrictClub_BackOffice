@@ -40,6 +40,8 @@ export async function getReservations(filters?: {
       client_id,
       duration_minutes,
       actual_price,
+      custom_start_time,
+      custom_end_time,
       terrain:terrains(id, code),
       time_slot:time_slots(id, start_time, end_time, price),
       user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
@@ -78,6 +80,46 @@ export async function getReservationById(id: number) {
       user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone)
     `)
     .eq('id', id)
+    .single()
+
+  if (error) throw error
+  return data as Reservation
+}
+
+export async function moveReservation(
+  id: number,
+  terrainId: number,
+  timeSlotId: number,
+) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('reservations')
+    .update({
+      terrain_id: terrainId,
+      time_slot_id: timeSlotId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select(`
+      *,
+      terrain:terrains(id, code),
+      time_slot:time_slots(id, start_time, end_time, price),
+      user:profiles!reservations_user_id_profiles_fkey(id, first_name, last_name, email, phone),
+      client:clients(id, full_name, phone)
+    `)
+    .single()
+
+  if (error) throw error
+  return data as Reservation
+}
+
+export async function updateReservationPrice(id: number, price: number) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('reservations')
+    .update({ actual_price: price, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
     .single()
 
   if (error) throw error
@@ -142,31 +184,30 @@ export async function sendReservationStatusEmail(reservation: Reservation, newSt
       start_time: startTime,
     }
 
-    // --- Email pour le joueur ---
-    const playerTitle = emailType === 'reservation_confirmed'
-      ? 'Réservation confirmée'
-      : 'Réservation annulée'
-
-    const playerBody = emailType === 'reservation_confirmed'
-      ? `Votre réservation sur ${terrainName} le ${date} à ${startTime} est confirmée.`
-      : `Votre réservation sur ${terrainName} le ${date} à ${startTime} a été annulée.`
-
-    // Target: send to the reservation user (profile)
-    const targetUserIds: string[] = []
-    if (reservation.user_id) targetUserIds.push(reservation.user_id)
-
-    if (targetUserIds.length > 0) {
-      await supabase.functions.invoke('send-email-notification', {
-        body: {
-          type: emailType,
-          title: playerTitle,
-          body: playerBody,
-          data: emailData,
-          target_type: targetUserIds.length === 1 ? 'single' : 'multiple',
-          target_user_ids: targetUserIds,
-        },
-      })
-    }
+    // --- Email pour le joueur (désactivé) ---
+    // const playerTitle = emailType === 'reservation_confirmed'
+    //   ? 'Réservation confirmée'
+    //   : 'Réservation annulée'
+    //
+    // const playerBody = emailType === 'reservation_confirmed'
+    //   ? `Votre réservation sur ${terrainName} le ${date} à ${startTime} est confirmée.`
+    //   : `Votre réservation sur ${terrainName} le ${date} à ${startTime} a été annulée.`
+    //
+    // const targetUserIds: string[] = []
+    // if (reservation.user_id) targetUserIds.push(reservation.user_id)
+    //
+    // if (targetUserIds.length > 0) {
+    //   await supabase.functions.invoke('send-email-notification', {
+    //     body: {
+    //       type: emailType,
+    //       title: playerTitle,
+    //       body: playerBody,
+    //       data: emailData,
+    //       target_type: targetUserIds.length === 1 ? 'single' : 'multiple',
+    //       target_user_ids: targetUserIds,
+    //     },
+    //   })
+    // }
 
     // --- Email pour le manager ---
     if (managerEmail) {
@@ -260,14 +301,17 @@ export async function createReservationWithClient(reservation: {
   terrain_id: number
   time_slot_id: number
   reservation_date: string
-  client_id: string
+  client_id?: string | null
+  user_id?: string | null
   status?: string
   duration_minutes?: number
   actual_price?: number | null
+  custom_start_time?: string | null
+  custom_end_time?: string | null
 }) {
   const supabase = createClient()
-  const userId = await getManualReservationUserId()
-  
+  const userId = reservation.user_id || await getManualReservationUserId()
+
   const { data, error } = await supabase
     .from('reservations')
     .insert({
@@ -275,10 +319,12 @@ export async function createReservationWithClient(reservation: {
       time_slot_id: reservation.time_slot_id,
       reservation_date: reservation.reservation_date,
       user_id: userId,
-      client_id: reservation.client_id,
+      client_id: reservation.client_id || null,
       status: reservation.status || 'CONFIRMED',
       duration_minutes: reservation.duration_minutes || 90,
       actual_price: reservation.actual_price ?? null,
+      custom_start_time: reservation.custom_start_time || null,
+      custom_end_time: reservation.custom_end_time || null,
     })
     .select(`
       *,

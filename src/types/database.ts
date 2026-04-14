@@ -34,6 +34,8 @@ export interface Reservation {
   status: ReservationStatus
   duration_minutes: number
   actual_price: number | null
+  custom_start_time: string | null
+  custom_end_time: string | null
   created_at: string
   updated_at: string
   terrain?: Terrain

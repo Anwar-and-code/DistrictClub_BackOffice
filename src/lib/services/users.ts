@@ -37,6 +37,20 @@ export async function updateUser(id: string, updates: Partial<User>) {
   return data as User
 }
 
+export async function searchProfiles(query: string): Promise<User[]> {
+  const supabase = createClient()
+  const search = `%${query}%`
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .or(`first_name.ilike.${search},last_name.ilike.${search},phone.ilike.${search}`)
+    .eq('role', 'JOUEUR')
+    .limit(5)
+
+  if (error) throw error
+  return (data || []) as User[]
+}
+
 export async function getUserReservationsCount(userId: string) {
   const supabase = createClient()
   const { count, error } = await supabase

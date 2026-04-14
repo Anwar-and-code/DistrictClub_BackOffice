@@ -41,3 +41,15 @@ export async function getOrCreateClient(fullName: string, phone: string): Promis
   }
   return createNewClient(fullName, phone)
 }
+
+export async function searchClients(query: string): Promise<Client[]> {
+  const supabase = createSupabaseClient()
+  const { data, error } = await supabase
+    .from('clients')
+    .select('*')
+    .ilike('full_name', `%${query}%`)
+    .limit(5)
+
+  if (error) throw error
+  return (data || []) as Client[]
+}
