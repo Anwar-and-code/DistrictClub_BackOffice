@@ -216,6 +216,7 @@ export default function CaissePage() {
   const [zReportDate, setZReportDate] = useState("")
   const [zReportOrders, setZReportOrders] = useState<PosOrder[]>([])
   const [zReportExpenses, setZReportExpenses] = useState<{ id: number; description: string; amount: number; category: string; created_at: string }[]>([])
+  const [zReportItems, setZReportItems] = useState<{ product_name: string; quantity: number; total: number }[]>([])
   const [zReportLoading, setZReportLoading] = useState(false)
 
   // Commander
@@ -503,8 +504,20 @@ export default function CaissePage() {
           .gte("created_at", `${date}T00:00:00`)
           .lt("created_at", `${nextDayStr}T00:00:00`)
       ])
-      setZReportOrders(ordRes.data || [])
+      const orders = ordRes.data || []
+      setZReportOrders(orders)
       setZReportExpenses(expRes.data || [])
+
+      const orderIds = orders.map(o => o.id)
+      if (orderIds.length > 0) {
+        const { data: itemsRes } = await supabase
+          .from("pos_order_items")
+          .select("product_name, quantity, total")
+          .in("order_id", orderIds)
+        setZReportItems(itemsRes || [])
+      } else {
+        setZReportItems([])
+      }
     } catch (error) {
       console.error(error)
     } finally {
@@ -3256,7 +3269,7 @@ export default function CaissePage() {
                 <p className="text-xs text-neutral-500 mt-0.5">{new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => { const d = new Date().toISOString().split("T")[0]; setZReportDate(d); setZReportOrders(todayOrders); setZReportExpenses(sessionExpenses); setShowHistory(false); setShowZReport(true) }} className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-neutral-700 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors">
+                <button onClick={() => { const d = new Date().toISOString().split("T")[0]; setZReportDate(d); setShowHistory(false); setShowZReport(true); loadZReportForDate(d) }} className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-neutral-700 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors">
                   <Printer className="h-3.5 w-3.5" />
                   Rapport Z
                 </button>
@@ -3493,6 +3506,17 @@ export default function CaissePage() {
           .reduce((s, o) => s + getOrderSlotPrice(o), 0)
         const zDepenses = zReportExpenses.reduce((s, e) => s + e.amount, 0)
         const zTotal = zReservation + zCaisse - zDepenses
+        const zProductBreakdown = Object.values(
+          zReportItems.reduce((acc, it) => {
+            const key = it.product_name
+            if (!acc[key]) acc[key] = { product_name: key, quantity: 0, total: 0 }
+            acc[key].quantity += it.quantity
+            acc[key].total += it.total
+            return acc
+          }, {} as Record<string, { product_name: string; quantity: number; total: number }>)
+        ).sort((a, b) => b.total - a.total)
+        const zProductsTotal = zProductBreakdown.reduce((s, p) => s + p.total, 0)
+        const zProductsQty = zProductBreakdown.reduce((s, p) => s + p.quantity, 0)
         const zPmBreakdown = zReportOrders.reduce((acc, o) => {
           // Use payment_details JSONB first, then allOrderPayments, then fallback
           const pmts = (o.payment_details && Array.isArray(o.payment_details) && o.payment_details.length > 0)
@@ -3571,8 +3595,7 @@ export default function CaissePage() {
                     onClick={() => {
                       const nd = new Date().toISOString().split("T")[0]
                       setZReportDate(nd)
-                      setZReportOrders(todayOrders)
-                      setZReportExpenses(sessionExpenses)
+                      loadZReportForDate(nd)
                     }}
                     className="px-2 py-1 text-[10px] font-medium bg-neutral-100 hover:bg-neutral-200 rounded transition-colors"
                   >
@@ -3602,6 +3625,22 @@ export default function CaissePage() {
                     {Object.entries(zPmBreakdown).map(([method, amount]) => (
                       <div key={method} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>{method}</span><span>{formatCurrency(amount)}</span></div>
                     ))}
+                    {zProductBreakdown.length > 0 && (
+                      <>
+                        <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
+                        <div style={{ fontSize: "10px", fontWeight: "bold", marginBottom: "4px", textTransform: "uppercase" }}>Articles vendus</div>
+                        {zProductBreakdown.map((p) => (
+                          <div key={p.product_name} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px" }}>
+                            <span>{p.quantity}x {p.product_name}</span>
+                            <span>{formatCurrency(p.total)}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "11px", fontWeight: "bold", marginTop: "2px" }}>
+                          <span>Total articles ({zProductsQty})</span>
+                          <span>{formatCurrency(zProductsTotal)}</span>
+                        </div>
+                      </>
+                    )}
                     <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
                     <div style={{ fontSize: "10px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}><span>Nb tickets</span><span>{zReportOrders.length}</span></div>

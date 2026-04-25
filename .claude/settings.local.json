@@ -4,7 +4,11 @@
       "mcp__supabase__list_projects",
       "mcp__supabase__get_edge_function",
       "mcp__supabase__apply_migration",
-      "mcp__supabase__deploy_edge_function"
+      "mcp__supabase__deploy_edge_function",
+      "Bash(SUPABASE_ACCESS_TOKEN=sbp_2592a8ee0ff825d3c5f5d856af62d62fb544396e npx -y @supabase/mcp-server-supabase@latest --help)",
+      "Bash(curl -s -H \"Authorization: Bearer sbp_774ed747d539e642ae05772438ab2452b40e3128\" https://api.supabase.com/v1/projects)",
+      "Bash(python3 -m json.tool)",
+      "Bash(npx tsc *)"
     ]
   }
 }
